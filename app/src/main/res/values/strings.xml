@@ -31,7 +31,7 @@
     <string name="btn_confirm_reset">Reset</string>
     <string name="confirm_exit">Close Tide Tank?</string>
     <string name="confirm_reset">The guide will be cleared. Sure?</string>
-    <string name="reopen_note">This window opens again beside the tank.</string>
+    <string name="reopen_note">This window opens again under the tank.</string>
     <string name="set_language">Language</string>
     <string name="lang_system">System</string>
     <string name="lang_zh">中文</string>

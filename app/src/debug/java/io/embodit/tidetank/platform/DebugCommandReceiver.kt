@@ -62,6 +62,9 @@ class DebugCommandReceiver : BroadcastReceiver() {
             "tide" -> Tide.parse(a.getOrNull(0))?.let { t.setTide(it, "debug") }
             "food" -> Food.parse(a.getOrNull(0))?.let { t.setFood(it, "debug") }
             "tapjar" -> Active.listener?.route(Names.JAR, null)
+            // placeoff <dp>: try another control-window offset (next open / reopen uses it; tuning only)
+            "placeside" -> { io.embodit.tidetank.domain.ControlPlacement.side = io.embodit.tidetank.domain.ControlPlacement.Side.valueOf(a[0].uppercase()); io.embodit.tidetank.domain.ControlPlacement.offsetDp = f(a.getOrNull(1), 0f); g.window.reopen() }
+            "placeoff" -> { io.embodit.tidetank.domain.ControlPlacement.offsetDp = f(a.getOrNull(0), io.embodit.tidetank.domain.ControlPlacement.OFFSET_DP); g.window.reopen() }
             "tapsign" -> Active.listener?.route(Names.SIGN, null)
             // q1-1: a tap on the brass handle (next stop) / on a gauge plate (that stop), same route as a real tap
             "taphandle" -> Active.listener?.route(Names.HANDLE, null)

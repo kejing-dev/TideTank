@@ -31,7 +31,7 @@
     <string name="btn_confirm_reset">重置</string>
     <string name="confirm_exit">关掉潮汐水族？</string>
     <string name="confirm_reset">图鉴会清空，确定？</string>
-    <string name="reopen_note">控制窗会在水缸旁边重新打开。</string>
+    <string name="reopen_note">控制窗会在水缸下方重新打开。</string>
     <string name="set_language">语言</string>
     <string name="lang_system">跟随系统</string>
     <string name="lang_zh">中文</string>

@@ -12,7 +12,7 @@ import io.embodit.tidetank.ui.Containers
 
 /**
  * Opens / reopens the control window and tracks both containers (design windowModel, D44 / D45). Shared Space never
- * promises "in front of you": every open is Placement.right(volume) (Main.kt) and the user moves the window with the
+ * promises "in front of you": every open uses ControlPlacement (below the volume, Main.kt) and the user moves the window with the
  * system handle. No head pose is read anywhere in this app. Exit closes both containers before the tasks are removed.
  */
 class WindowCtl {
@@ -43,7 +43,7 @@ class WindowCtl {
             .onFailure { Log.e(TAG, "WINDOW open failed", it) }
     }
 
-    /** Settings [重开控制窗]: close, wait for ON_DESTROY, open again beside the tank. */
+    /** Settings [重开控制窗]: close, wait for ON_DESTROY, open again under the tank. */
     fun reopen() {
         if (!panelOpen) { open("reopen"); return }
         reopenPending = true
@@ -51,7 +51,7 @@ class WindowCtl {
         runCatching { (navigator ?: panelNavigator)?.closeWindowContainer(Containers.CONTROL, Containers.CONTROL_TAG) }
     }
 
-    /** Recall stone / settings [重开控制窗] (design v5 T10): open it beside the tank, or put an open one back there. */
+    /** Recall stone / settings [重开控制窗] (design v5 T10): open it under the tank, or put an open one back there. */
     fun recall(why: String) {
         Log.i(TAG, "WINDOW recall why=$why open=$panelOpen")
         if (panelOpen) reopen() else open(why)

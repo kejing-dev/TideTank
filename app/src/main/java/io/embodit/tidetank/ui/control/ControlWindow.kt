@@ -67,7 +67,7 @@ import java.util.Locale
 import kotlin.system.exitProcess
 
 /**
- * The control window (Planar 600 x 600 dp fixed, Placement.right(volume); design panels.control): three pages switched
+ * The control window (Planar 600 x 440 dp fixed (v0.1.2), below the volume via ControlPlacement (v0.1.2); design panels.control): three pages switched
  * only by the native SpatialUI TabBar (D8): 水缸 / 图鉴 / 设置. The how-to card (S01), the all-found card (S09), the guide
  * detail (S08b) and the confirm rows (S11) replace content in place; no page scrolls; every page is a centred column so
  * the blank stays <= 25 % (D44). Buttons 64 dp with words (B19 / B31), rows >= 48 dp, gaps >= 16 dp.
@@ -143,7 +143,7 @@ private fun NativeTabs(tabs: List<Triple<Page, Int, String>>) {
 
 /**
  * A centred page column. Logs `BLANK <page> content=<dp> blank=<%>` (blank = window height outside the content block, top +
- * bottom, over the 600 dp window; build.md 空白的量法) so the ui-audit table comes from the real layout of every state.
+ * bottom, over the window height (440 dp since v0.1.2); build.md 空白的量法) so the ui-audit table comes from the real layout of every state.
  */
 @Composable
 private fun PageColumn(gap: Int = 20, forId: String? = null, content: @Composable ColumnScope.() -> Unit) {
@@ -160,7 +160,7 @@ private fun PageColumn(gap: Int = 20, forId: String? = null, content: @Composabl
     }
 }
 
-private const val WINDOW_DP = 600f
+private val WINDOW_DP = io.embodit.tidetank.domain.ControlPlacement.WINDOW_H_DP
 
 private fun pageId(): String = when {
     Ui.page == Page.TANK && Ui.howTo -> "S01"
@@ -173,9 +173,9 @@ private fun pageId(): String = when {
 /** S00 (design: spinner + 「在放水……」): the how-to picture and lines are already readable while the tank fills (D44 blank). */
 @Composable
 private fun Loading() {
-    PageColumn(16, "S00") {
+    PageColumn(14, "S00") {
         Image(painterResource(R.drawable.howto_scene), contentDescription = null, contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxWidth().height(196.dp).clip(RoundedCornerShape(20.dp)))
+            modifier = Modifier.fillMaxWidth().height(116.dp).clip(RoundedCornerShape(20.dp)))
         HowRow(R.drawable.ic_touch, stringResource(R.string.how_to_feed), stringResource(R.string.how_to_feed_ways), "s00/feed")
         HowRow(R.drawable.ic_swap_vert, stringResource(R.string.how_to_tide), stringResource(R.string.how_to_tide_ways), "s00/tide")
         HowRow(R.drawable.ic_menu_book, stringResource(R.string.how_to_find), stringResource(R.string.how_to_find_ways), "s00/find")
@@ -190,30 +190,30 @@ private fun Loading() {
 /** Row 1: one sentence, what to do now / what just happened / a clue (design panels.pages.tank). */
 @Composable
 private fun StatusCard(say: Say, zh: Boolean) {
-    Box(Modifier.fillMaxWidth().height(88.dp).clip(RoundedCornerShape(20.dp)).background(TankColors.Card).padding(horizontal = 20.dp), contentAlignment = Alignment.CenterStart) {
+    Box(Modifier.fillMaxWidth().height(72.dp).clip(RoundedCornerShape(20.dp)).background(TankColors.Card).padding(horizontal = 20.dp), contentAlignment = Alignment.CenterStart) {
         Txt(say.panel.get(zh), "tank/line", style = PicoTheme.typography.titleMedium, color = TankColors.Ink, maxLines = 2)
     }
 }
 
 @Composable
 private fun TankPage(ui: TankUi, settings: Settings, graph: Graph, zh: Boolean) {
-    PageColumn {
+    PageColumn(8) {
         StatusCard(ui.say, zh)
         // gate:allow button-gap 小标题和它下面的分段控件是一组（不是并排按钮）
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Txt(stringResource(R.string.tide), "tank/tide-label", style = PicoTheme.typography.labelLarge, color = TankColors.InkSecondary)
             Segments(listOf(Tide.L to stringResource(R.string.tide_l), Tide.M to stringResource(R.string.tide_m), Tide.H to stringResource(R.string.tide_h)),
                 ui.tide, "tank/tide", onSelect = { graph.tank.setTide(it, "panel") }, modifier = Modifier.fillMaxWidth(), height = 56.dp)
         }
         // gate:allow button-gap 小标题和它下面的分段控件是一组（不是并排按钮）
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Txt(stringResource(R.string.food), "tank/food-label", style = PicoTheme.typography.labelLarge, color = TankColors.InkSecondary)
             Segments(listOf(Food.FLAKES to stringResource(R.string.food_flakes), Food.PELLETS to stringResource(R.string.food_pellets), Food.SHRIMP to stringResource(R.string.food_shrimp)),
                 ui.food, "tank/food", onSelect = { graph.tank.setFood(it, "panel") }, modifier = Modifier.fillMaxWidth(), height = 56.dp)
         }
         // row 4: guide progress + the latest card (tap = guide page)
         Row(
-            Modifier.fillMaxWidth().height(72.dp).clip(RoundedCornerShape(20.dp)).background(TankColors.Card).clickable { Ui.page = Page.GUIDE; Ui.detail = ui.latest }.padding(horizontal = 16.dp),
+            Modifier.fillMaxWidth().height(64.dp).clip(RoundedCornerShape(20.dp)).background(TankColors.Card).clickable { Ui.page = Page.GUIDE; Ui.detail = ui.latest }.padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Txt(stringResource(R.string.guide_count, ui.discovered.size), "tank/guide-count", style = PicoTheme.typography.titleMedium, color = TankColors.Ink)
@@ -241,9 +241,9 @@ private fun MuteButton(settings: Settings, graph: Graph, modifier: Modifier) {
 /** S01 / [怎么玩]: picture + three lines (each: what to do, how with a hand / a controller) + [知道了] (B19 how_to_*). */
 @Composable
 private fun HowToCard(graph: Graph) {
-    PageColumn(16) {
+    PageColumn(14) {
         Image(painterResource(R.drawable.howto_scene), contentDescription = null, contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxWidth().height(196.dp).clip(RoundedCornerShape(20.dp)))
+            modifier = Modifier.fillMaxWidth().height(116.dp).clip(RoundedCornerShape(20.dp)))
         HowRow(R.drawable.ic_touch, stringResource(R.string.how_to_feed), stringResource(R.string.how_to_feed_ways), "howto/feed")
         HowRow(R.drawable.ic_swap_vert, stringResource(R.string.how_to_tide), stringResource(R.string.how_to_tide_ways), "howto/tide")
         HowRow(R.drawable.ic_menu_book, stringResource(R.string.how_to_find), stringResource(R.string.how_to_find_ways), "howto/find")
@@ -266,13 +266,13 @@ private fun HowRow(icon: Int, line: String, ways: String, tag: String) {
 /** S09: everything found (design panels.pages.result). */
 @Composable
 private fun ResultCard(ui: TankUi, settings: Settings, graph: Graph) {
-    PageColumn(20) {
+    PageColumn(8) {
         Txt(stringResource(R.string.guide_all), "result/title", style = PicoTheme.typography.headlineSmall, color = TankColors.Ink, align = TextAlign.Center, maxLines = 2, modifier = Modifier.fillMaxWidth())
         Txt(stringResource(R.string.result_sub), "result/sub", style = PicoTheme.typography.bodyMedium, color = TankColors.InkSecondary, align = TextAlign.Center, maxLines = 2, modifier = Modifier.fillMaxWidth())
         // six cards, 3 x 2 (picture + name), so the card fills the window (blank <= 25 %, D44)
         for (row in Kind.entries.chunked(3)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                for (k in row) Column(Modifier.weight(1f).height(100.dp).clip(RoundedCornerShape(16.dp)).background(TankColors.Card).padding(6.dp),
+                for (k in row) Column(Modifier.weight(1f).height(76.dp).clip(RoundedCornerShape(16.dp)).background(TankColors.Card).padding(6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     Thumb(k, k in ui.discovered, Modifier.weight(1f).fillMaxWidth())
                     Txt(Creatures.of(k).name.get(isZh(settings)), "result/name-${k.key}", style = PicoTheme.typography.labelMedium, color = TankColors.Ink)
@@ -304,9 +304,9 @@ private fun thumbOf(k: Kind) = when (k) {
 /** S08: the guide, 3 x 2 cards (picture / silhouette, name, how you met). */
 @Composable
 private fun GuidePage(ui: TankUi, zh: Boolean) {
-    PageColumn(16) {
+    PageColumn(8) {
         Txt(if (ui.discovered.size == 6) stringResource(R.string.guide_all) else stringResource(R.string.guide_count, ui.discovered.size), "guide/title",
-            style = PicoTheme.typography.titleLarge, color = TankColors.Ink, modifier = Modifier.height(40.dp))
+            style = PicoTheme.typography.titleLarge, color = TankColors.Ink, modifier = Modifier.height(36.dp))
         for (row in Kind.entries.chunked(3)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 for (k in row) GuideCard(k, ui.discovered[k], zh, Modifier.weight(1f))
@@ -318,10 +318,10 @@ private fun GuidePage(ui: TankUi, zh: Boolean) {
 @Composable
 private fun GuideCard(k: Kind, d: io.embodit.tidetank.domain.Discovery?, zh: Boolean, modifier: Modifier) {
     Column(
-        modifier.height(200.dp).clip(RoundedCornerShape(20.dp)).background(TankColors.Card).clickable { Ui.detail = k }.padding(12.dp),
+        modifier.height(168.dp).clip(RoundedCornerShape(20.dp)).background(TankColors.Card).clickable { Ui.detail = k }.padding(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Thumb(k, d != null, Modifier.height(100.dp).fillMaxWidth())
+        Thumb(k, d != null, Modifier.height(76.dp).fillMaxWidth())
         if (d != null) {
             Txt(Creatures.of(k).name.get(zh), "guide/name-${k.key}", style = PicoTheme.typography.labelLarge, color = TankColors.Ink, align = TextAlign.Center, maxLines = 2)
             Txt(Say.how(d, zh), "guide/how-${k.key}", style = PicoTheme.typography.bodySmall, color = TankColors.InkSecondary, align = TextAlign.Center, maxLines = 2)
@@ -338,8 +338,8 @@ private fun DetailPage(k: Kind, ui: TankUi, graph: Graph, zh: Boolean) {
     val info = Creatures.of(k)
     // a seen creature that is in the tank gets its name tag for 3 s (design S08b)
     LaunchedEffect(k, d != null) { if (d != null) graph.tank.showTagFromGuide(k) }
-    PageColumn(12) {
-        Box(Modifier.fillMaxWidth().height(if (d != null) 280.dp else 340.dp).clip(RoundedCornerShape(20.dp)).background(TankColors.Card).padding(12.dp), contentAlignment = Alignment.Center) {
+    PageColumn(10) {
+        Box(Modifier.fillMaxWidth().height(if (d != null) 160.dp else 236.dp).clip(RoundedCornerShape(20.dp)).background(TankColors.Card).padding(12.dp), contentAlignment = Alignment.Center) {
             Thumb(k, d != null, Modifier.fillMaxSize())
         }
         if (d != null) {
@@ -360,7 +360,7 @@ private fun DetailPage(k: Kind, ui: TankUi, graph: Graph, zh: Boolean) {
 /** S10 settings (design settings: 7 rows, [退出应用] on the first screen) + S11 in-place confirm rows. */
 @Composable
 private fun SettingsPage(settings: Settings, graph: Graph, context: Context) {
-    PageColumn(12) {
+    PageColumn(10) {
         OptionRow(stringResource(R.string.set_language), "settings/lang", labelWidth = 100.dp) {
             Segments(listOf(Language.SYSTEM to stringResource(R.string.lang_system), Language.ZH to stringResource(R.string.lang_zh), Language.EN to stringResource(R.string.lang_en)),
                 settings.language, "settings/lang", onSelect = { l -> graph.settings.update { it.copy(language = l) }; Log.i(TAG, "LANG $l") }, modifier = Modifier.weight(1f), height = 56.dp)
@@ -369,15 +369,19 @@ private fun SettingsPage(settings: Settings, graph: Graph, context: Context) {
             Box(Modifier.weight(1f)) { SwitchRow(stringResource(R.string.set_sound), "settings/sound", settings.sound, { v -> graph.settings.update { it.copy(sound = v) } }) }
             Box(Modifier.weight(1f)) { SwitchRow(stringResource(R.string.set_pump), "settings/pump", settings.pump, { v -> graph.settings.update { it.copy(pump = v) } }) }
         }
-        OptionRow(stringResource(R.string.set_volume), "settings/volume", labelWidth = 100.dp) {
-            VolumeSlider(settings.volume, onChange = { v -> graph.settings.update { it.copy(volume = v) } }, modifier = Modifier.weight(1f))
+        // v0.1.2 (window 440 dp tall, q2-1): volume and reduced motion share a row; the slider keeps >= 100 dp (B19)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
+                OptionRow(stringResource(R.string.set_volume), "settings/volume", labelWidth = 72.dp) {
+                    VolumeSlider(settings.volume, onChange = { v -> graph.settings.update { it.copy(volume = v) } }, modifier = Modifier.weight(1f))
+                }
+            }
+            Box(Modifier.weight(1f)) { SwitchRow(stringResource(R.string.set_reduced), "settings/reduced", settings.reducedMotion, { v -> graph.settings.update { it.copy(reducedMotion = v) } }) }
         }
-        SwitchRow(stringResource(R.string.set_reduced), "settings/reduced", settings.reducedMotion, { v -> graph.settings.update { it.copy(reducedMotion = v) } })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             SecondaryButton(stringResource(R.string.how_to_settings), "settings/how", onClick = { Ui.page = Page.TANK; Ui.howTo = true }, icon = R.drawable.ic_help, modifier = Modifier.weight(1f))
             SecondaryButton(stringResource(R.string.btn_reopen), "settings/reopen", onClick = { graph.window.reopen() }, icon = R.drawable.ic_open_in_new, modifier = Modifier.weight(1f))
         }
-        Txt(stringResource(R.string.reopen_note), "settings/reopen-note", style = PicoTheme.typography.bodySmall, color = TankColors.InkSecondary)
         when (Ui.confirm) {
             Confirm.QUIT -> ConfirmRow(stringResource(R.string.confirm_exit), stringResource(R.string.btn_confirm_exit), R.drawable.ic_logout, "confirm/exit") { exitApp(context, graph) }
             Confirm.RESET -> ConfirmRow(stringResource(R.string.confirm_reset), stringResource(R.string.btn_confirm_reset), R.drawable.ic_refresh, "confirm/reset") {

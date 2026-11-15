@@ -40,17 +40,42 @@ import androidx.compose.runtime.setValue
 
 const val TAG = "TideTank"
 
-class LaunchActivity : SpatialLaunchActivity()
+class LaunchActivity : SpatialLaunchActivity() {
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        Startup.mark("activity.onCreate")
+        super.onCreate(savedInstanceState)
+        Startup.mark("activity.onCreate done")
+    }
+}
 
 class SpatialApplication : Application() {
     lateinit var graph: Graph
         private set
 
     override fun onCreate() {
+        Startup.mark("app.onCreate")
         super.onCreate()
         io.embodit.tidetank.ui.tank.input.BoardInputLog.attach(this)
         graph = Graph(this)
+        Startup.mark("graph")
         launch(::mainApp)
+        Startup.mark("launch(mainApp)")
+    }
+}
+
+/**
+ * q2-2: cold-start segments, all measured from the process start (Process.getStartElapsedRealtime). One STARTUP line per
+ * mark and a summary when the shell is shown; nothing heavy runs on the main thread before the scene build (sounds load
+ * on a background thread, the save loads on IO, models load on the scene scope).
+ */
+object Startup {
+    private val marks = LinkedHashMap<String, Long>()
+    fun sinceProcess(): Long = SystemClock.elapsedRealtime() - android.os.Process.getStartElapsedRealtime()
+    @Synchronized fun mark(what: String) {
+        if (marks.containsKey(what)) return
+        val t = sinceProcess(); marks[what] = t
+        Log.i(TAG, "STARTUP $what at $t ms since process start")
+        if (what == "shell shown") Log.i(TAG, "STARTUP summary " + marks.entries.joinToString(" | ") { "${it.key}=${it.value}" })
     }
 }
 
@@ -205,11 +230,16 @@ class SoundPlayer(private val context: Context) {
 
     init {
         pool.setOnLoadCompleteListener { _, id, status -> if (status == 0) synchronized(loaded) { loaded += id } }
-        for (s in Sfx.entries) {
-            val found = ArrayList<Int>()
-            for (name in FILES.getValue(s)) runCatching { found += context.assets.openFd("sounds/$name.wav").use { fd -> pool.load(fd, 1) } }
-            if (found.isNotEmpty()) ids[s] = found else Log.w(TAG, "no sound $s")
-        }
+        // q2-2: the 19 sound files open off the main thread (was ~20 asset opens + loads inside Application.onCreate)
+        Thread({
+            val t0 = SystemClock.elapsedRealtime()
+            for (s in Sfx.entries) {
+                val found = ArrayList<Int>()
+                for (name in FILES.getValue(s)) runCatching { found += context.assets.openFd("sounds/$name.wav").use { fd -> pool.load(fd, 1) } }
+                if (found.isNotEmpty()) synchronized(ids) { ids[s] = found } else Log.w(TAG, "no sound $s")
+            }
+            Log.i(TAG, "STARTUP sounds queued in ${SystemClock.elapsedRealtime() - t0} ms (background)")
+        }, "tidetank-sounds").start()
     }
 
     fun gain(): Float = Settings.VOLUME[volumeLevel.coerceIn(0, 2)]
@@ -220,7 +250,7 @@ class SoundPlayer(private val context: Context) {
         // rate limit per event (a pour of 3 particles = one plop; bites in a burst)
         if (t - (lastAt[s] ?: 0L) < MIN_GAP.getValue(s)) return
         lastAt[s] = t
-        val variants = ids[s] ?: return
+        val variants = synchronized(ids) { ids[s] } ?: return
         var v = random.nextInt(variants.size)
         if (v == lastVariant[s] && variants.size > 1) v = (v + 1) % variants.size
         lastVariant[s] = v

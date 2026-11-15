@@ -39,6 +39,7 @@ import io.embodit.tidetank.domain.Settings
 import io.embodit.tidetank.domain.Tank
 import io.embodit.tidetank.domain.Tide
 import io.embodit.tidetank.platform.Graph
+import io.embodit.tidetank.platform.Startup
 import io.embodit.tidetank.platform.TAG
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -170,6 +171,8 @@ internal class TankScene(private val context: Context, private val graph: Graph,
     private val appearing = HashMap<Entity, Long>()
     private var modelsIn = 0
     private var shellMs = 0L
+    private var jarShadowOff = false
+    private var jarShadowParts = -1
 
     /**
      * q1-3: two steps. (1) The shell: procedural meshes + 3 small textures only (base, plaque, glass, water, sand, sea
@@ -179,6 +182,7 @@ internal class TankScene(private val context: Context, private val graph: Graph,
      */
     suspend fun build() {
         val t0 = SystemClock.elapsedRealtime()
+        Startup.mark("scene build")
         Log.i(TAG, "SCENE build start (process up ${t0 - android.os.Process.getStartElapsedRealtime()} ms)")
         val io = Dispatchers.IO
         root.transform().setScaleVector(Vector3(Geo.SCALE, Geo.SCALE, Geo.SCALE))
@@ -398,6 +402,7 @@ internal class TankScene(private val context: Context, private val graph: Graph,
         built = true
         startMs = SystemClock.elapsedRealtime()
         android.os.Handler(android.os.Looper.getMainLooper()).post { graph.sceneReady = true }
+        Startup.mark("shell shown")
         Log.i(TAG, "SCENE shell (glass, water, sand, base) in $shellMs ms fish=${fishEnt.size} slots=${slots.size}; models load on")
         prewarm()
     }
@@ -559,6 +564,15 @@ internal class TankScene(private val context: Context, private val graph: Graph,
                 // tips toward the tank's back-left: the mouth points down and a little forward (design 110 deg)
                 jarModel?.transform()?.setQuaternion(Quat(Vector3(1f, 0f, 0f), rad(-tank.jarTilt)))
                 jarModel?.at(0f, Geo.JAR_BOTTOM_OFF * kotlin.math.cos(rad(tank.jarTilt)), -Geo.JAR_BOTTOM_OFF * sin(rad(tank.jarTilt)))
+                // QA #2 small: a lifted jar casts no shadow (it fell on the see-through water / glass as a dark vertical smear);
+                // back on its pedestal the default shadow returns. Re-checked when the body / lid arrive (child count changes).
+                val lifted = tank.jarPhase != io.embodit.tidetank.domain.JarPhase.HOME
+                val parts = jarModel?.getChildren()?.size ?: 0
+                if (lifted != jarShadowOff || parts != jarShadowParts) {
+                    jarShadowOff = lifted; jarShadowParts = parts
+                    jarModel?.walk { e -> if (lifted) e.components.set(GroundShadowComponent(false, false)) else e.components.remove(GroundShadowComponent::class.java) }
+                    Log.i(TAG, "JAR shadow ${if (lifted) "off (lifted)" else "on (home)"} parts=$parts")
+                }
             }
             if (tank.food != shownFood) {
                 shownFood = tank.food

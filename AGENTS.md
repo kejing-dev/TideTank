@@ -19,7 +19,7 @@ GitHub: `kejing-dev/TideTank` (private).
   anemone / 3 seagrass tufts, sea gate (deep board + brass grille that fades open at high tide), 16 creatures, a 120-slot
   food pool, bubbles, the dashed drop column, the jar on its pedestal (lid colour = food), the tide post with gauge marks,
   float, the brass handle and the 「面板」 board (tap = reopen the control window), one name tag per kind.
-- **Control window** (`TideTankControl`, Planar 600 x 600 dp fixed, `Placement.right(TideTankVolume)`): native TabBar
+- **Control window** (`TideTankControl`, Planar 600 x 440 dp fixed (v0.1.2; was 600 x 600), `Placement.bottom(TideTankVolume)` via `domain/ControlPlacement.kt` (v0.1.2; was right)): native TabBar
   水缸 / 图鉴 / 设置. In place: how-to card (S01), all-found card (S09), guide detail (S08b), confirm rows (S11).
 
 ## Code
@@ -68,7 +68,9 @@ Log tag `TideTank`. Every command goes through the same calls as the 3D input / 
 | S11 确认 | `confirm quit|reset`; `yes` = the confirm button |
 | S12 回来了 | force-stop + relaunch with a save |
 Other: `tide`, `food`, `tap x z`, `tapjar`, `tapsign`, `taphandle`, `tapgauge L|M|H`, `sweep <food> x0 x1 z`, `handle <dy>…`, `hint`, `hold on|off`, `lang zh|en|system`,
-`sound on|off`, `volume 0..2`, `pump on|off`, `reduced on|off`, `closepanel`, `openpanel`, `testf on|off`, `dump`.
+`sound on|off`, `volume 0..2`, `pump on|off`, `reduced on|off`, `closepanel`, `openpanel`, `testf on|off`, `dump`,
+`placeside right|bottom|left [dp]` / `placeoff <dp>` (try another control-window placement, tuning only; ships bottom 0).
+Cold start: logcat `STARTUP <segment> at <ms> since process start` and one `STARTUP summary` line when the tank shell shows (q2-2).
 
 ## Known
 - The Mac emulator cannot send 3D pointer / pinch: jar carry and handle drag are driven by the broadcast through the same

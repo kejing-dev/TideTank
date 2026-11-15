@@ -24,6 +24,7 @@ import com.pico.spatial.ui.platform.containers.LocalSpatialNavigator
 import io.embodit.tidetank.domain.Geo
 import io.embodit.tidetank.domain.V3
 import io.embodit.tidetank.platform.Graph
+import io.embodit.tidetank.platform.Startup
 import io.embodit.tidetank.platform.TAG
 import io.embodit.tidetank.ui.tank.input.BoardInputConfig
 import io.embodit.tidetank.ui.tank.input.BoardInputListener
@@ -53,6 +54,7 @@ internal object SceneHolder {
 @Composable
 fun TankScreen() {
     val context = LocalContext.current
+    Startup.mark("TankScreen compose")
     val graph = remember(context) { Graph.from(context) }
     val settings by graph.settings.settings.collectAsStateWithLifecycle()
     val navigator = LocalSpatialNavigator.current
@@ -106,6 +108,7 @@ fun TankScreen() {
             .fillMaxSize()
             .boardInput(remember { TargetResolver.byName(Names::target) }, listener, BoardInputConfig(dragStartM = 0.012f, logTag = TAG)),
         initial = { content, _ ->
+            Startup.mark("SpatialView initial")
             listener.content = content
             content.addEntity(scene.root)
             scene.build()
