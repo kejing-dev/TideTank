@@ -1,0 +1,1 @@
+jar_lid.glb 罐盖本身是白底材质，运行时按当前饲料上色（绿 浮片 / 橙 沉粒 / 粉 丰年虾，TankScene lidMats），截图 S02 / S03 可见

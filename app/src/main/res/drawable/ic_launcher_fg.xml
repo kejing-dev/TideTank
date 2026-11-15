@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tide Tank launcher foreground: clownfish over two tide lines, three falling food grains (tools/build_icon.py draws the same for the PICO layered icon). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="3.2" android:strokeLineCap="round" android:pathData="M26.00,66.00L27.17,66.62L28.33,67.20L29.50,67.70L30.67,68.08L31.83,68.32L33.00,68.40L34.17,68.32L35.33,68.08L36.50,67.70L37.67,67.20L38.83,66.62L40.00,66.00L41.17,65.38L42.33,64.80L43.50,64.30L44.67,63.92L45.83,63.68L47.00,63.60L48.17,63.68L49.33,63.92L50.50,64.30L51.67,64.80L52.83,65.38L54.00,66.00L55.17,66.62L56.33,67.20L57.50,67.70L58.67,68.08L59.83,68.32L61.00,68.40L62.17,68.32L63.33,68.08L64.50,67.70L65.67,67.20L66.83,66.62L68.00,66.00L69.17,65.38L70.33,64.80L71.50,64.30L72.67,63.92L73.83,63.68L75.00,63.60L76.17,63.68L77.33,63.92L78.50,64.30L79.67,64.80L80.83,65.38L82.00,66.00" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="3.2" android:strokeLineCap="round" android:pathData="M26.00,74.00L27.17,74.62L28.33,75.20L29.50,75.70L30.67,76.08L31.83,76.32L33.00,76.40L34.17,76.32L35.33,76.08L36.50,75.70L37.67,75.20L38.83,74.62L40.00,74.00L41.17,73.38L42.33,72.80L43.50,72.30L44.67,71.92L45.83,71.68L47.00,71.60L48.17,71.68L49.33,71.92L50.50,72.30L51.67,72.80L52.83,73.38L54.00,74.00L55.17,74.62L56.33,75.20L57.50,75.70L58.67,76.08L59.83,76.32L61.00,76.40L62.17,76.32L63.33,76.08L64.50,75.70L65.67,75.20L66.83,74.62L68.00,74.00L69.17,73.38L70.33,72.80L71.50,72.30L72.67,71.92L73.83,71.68L75.00,71.60L76.17,71.68L77.33,71.92L78.50,72.30L79.67,72.80L80.83,73.38L82.00,74.00" />
+    <path android:fillColor="#FFE9C06A" android:pathData="M73.80,26.00a2.20,2.20 0 1,0 4.40,0a2.20,2.20 0 1,0 -4.40,0Z" />
+    <path android:fillColor="#FFE9C06A" android:pathData="M80.00,33.00a2.00,2.00 0 1,0 4.00,0a2.00,2.00 0 1,0 -4.00,0Z" />
+    <path android:fillColor="#FFE9C06A" android:pathData="M72.20,36.00a1.80,1.80 0 1,0 3.60,0a1.80,1.80 0 1,0 -3.60,0Z" />
+    <path android:fillColor="#FF1B1B1B" android:pathData="M28.60,47.00a21.40,13.90 0 1,0 42.80,0a21.40,13.90 0 1,0 -42.80,0Z" />
+    <path android:fillColor="#FF1B1B1B" android:pathData="M33.00,47.00L18.50,35.00L18.50,59.00Z" />
+    <path android:fillColor="#FFF27A1A" android:pathData="M30.00,47.00a20.00,12.50 0 1,0 40.00,0a20.00,12.50 0 1,0 -40.00,0Z" />
+    <path android:fillColor="#FFF27A1A" android:pathData="M31.00,47.00L20.00,37.00L20.00,57.00Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M38.40,35.84L43.60,35.84L43.60,58.16L38.40,58.16Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M53.00,35.08L59.00,35.08L59.00,58.92L53.00,58.92Z" />
+    <path android:fillColor="#FF1B1B1B" android:pathData="M62.00,44.00a2.00,2.00 0 1,0 4.00,0a2.00,2.00 0 1,0 -4.00,0Z" />
+</vector>
