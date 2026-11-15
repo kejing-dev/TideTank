@@ -1,11 +1,11 @@
 """Loudness evidence (B20 / ui_gates loudness, design sound.loudness). RENDERED, NOT RECORDED: kj-mbp-m5 has no audio
-loopback from the emulator. Uses the app's default gains (volume 「中」 = 0.75 x SoundPlayer.LEVEL) on the shipped WAVs.
+loopback from the emulator. Uses the app's default gains (volume 中 = 0.70 x SoundPlayer.LEVEL) on the shipped WAVs.
 
   ~/.factory-venv/bin/python tools/loudness.py OUT_DIR VERSION
 
-loudness-<v>.wav   the event sounds of a round back to back (inhale bell, exhale bell, matched bell, round-done bell, focus-end
-                   bell), silences trimmed: what ui_gates measures (voiced RMS: 20 ms windows above peak -30 dB)
-burst-<v>.wav      the tick 5 times 80 ms apart with the one-instance rule (D51: a new one stops the previous)
+loudness-<v>.wav   a feeding minute's event sounds back to back (pick, shakes, plop, bites, tide, click, gate, find, all
+                   found), silences trimmed: what ui_gates measures (voiced RMS: 20 ms windows above peak -30 dB)
+burst-<v>.wav      the bite 5 times 80 ms apart with the one-instance rule (D51: a new one stops the previous)
 """
 import os, sys, wave
 import numpy as np
@@ -13,8 +13,8 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SND = os.path.join(ROOT, "app", "src", "main", "assets", "sounds")
 SR = 44100
-VOL = 0.75
-LEVEL = {"inhale": 0.5, "exhale": 0.5, "tick": 0.32, "done": 0.5, "focus_end": 0.56}   # = SoundPlayer.LEVEL (v0.1.1: -6 dB)
+VOL = 0.70
+LEVEL = {"pick": 1.0, "shake_flakes": 1.0, "shake_pellets": 1.0, "shake_shrimp": 1.0, "plop": 0.9, "bite": 0.9, "tide": 1.0, "click": 1.0, "gate": 1.0, "discover": 1.0, "allfound": 1.0}   # = SoundPlayer.LEVEL
 
 
 def load(n):
@@ -50,15 +50,15 @@ def main():
     out, ver = sys.argv[1], sys.argv[2]
     os.makedirs(out, exist_ok=True)
     parts, rows = [], []
-    for n in ["inhale", "exhale", "tick", "done", "focus_end"]:
-        x = load(n) * VOL * LEVEL[n]
+    for n in ["pick", "shake_flakes", "plop", "bite", "shake_pellets", "bite_2", "shake_shrimp", "plop_2", "tide", "click", "gate", "discover", "allfound"]:
+        x = load(n) * VOL * LEVEL[n.replace("_2", "")]
         r, p = voiced(x)
         rows.append(f"{n:10s} voiced RMS {r:6.1f} dBFS  peak {p:6.1f} dBFS")
         parts += [trim_quiet(x), np.zeros(int(0.05 * SR))]
     seq = np.concatenate(parts)
     save(os.path.join(out, f"loudness-{ver}.wav"), seq)
     r, p = voiced(seq)
-    t = load("tick") * VOL * LEVEL["tick"]
+    t = load("bite") * VOL * LEVEL["bite"]
     burst = np.zeros(int(0.08 * SR) * 4 + len(t))
     for i in range(5):
         a = int(0.08 * SR) * i
@@ -68,7 +68,7 @@ def main():
     br, bp = voiced(burst)
     print("\n".join(rows))
     print(f"loudness-{ver}.wav voiced RMS {r:.1f} dBFS peak {p:.1f} dBFS (rendered at volume 中 = {VOL})")
-    print(f"burst-{ver}.wav 5 ticks / 80 ms peak {bp:.1f} dBFS")
+    print(f"burst-{ver}.wav 5 bites / 80 ms peak {bp:.1f} dBFS")
 
 
 main()

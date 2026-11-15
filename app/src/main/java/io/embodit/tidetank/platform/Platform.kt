@@ -263,9 +263,10 @@ class SoundPlayer(private val context: Context) {
         )
         /** Level on top of the file (files peak -1..-4 dBFS); event sounds stay under the find cue. */
         val LEVEL = mapOf(
-            Sfx.PICK to 0.8f, Sfx.SHAKE_FLAKES to 0.75f, Sfx.SHAKE_PELLETS to 0.75f, Sfx.SHAKE_SHRIMP to 0.75f, Sfx.PLOP to 0.7f,
-            Sfx.BITE to 0.75f, Sfx.TIDE to 0.8f, Sfx.CLICK to 0.85f, Sfx.GATE to 0.8f, Sfx.DISCOVER to 0.9f, Sfx.ALLFOUND to 0.9f,
+            Sfx.PICK to 1f, Sfx.SHAKE_FLAKES to 1f, Sfx.SHAKE_PELLETS to 1f, Sfx.SHAKE_SHRIMP to 1f, Sfx.PLOP to 0.9f,
+            Sfx.BITE to 0.9f, Sfx.TIDE to 1f, Sfx.CLICK to 1f, Sfx.GATE to 1f, Sfx.DISCOVER to 1f, Sfx.ALLFOUND to 1f,
         )
+        /** Rate limit per event, ms (a pour of 3 particles = one plop; bites in a burst). */
         val MIN_GAP = mapOf(
             Sfx.PICK to 200L, Sfx.SHAKE_FLAKES to 120L, Sfx.SHAKE_PELLETS to 120L, Sfx.SHAKE_SHRIMP to 120L, Sfx.PLOP to 90L,
             Sfx.BITE to 70L, Sfx.TIDE to 600L, Sfx.CLICK to 100L, Sfx.GATE to 300L, Sfx.DISCOVER to 300L, Sfx.ALLFOUND to 1000L,

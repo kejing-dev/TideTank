@@ -266,11 +266,18 @@ private fun HowRow(icon: Int, line: String, ways: String, tag: String) {
 /** S09: everything found (design panels.pages.result). */
 @Composable
 private fun ResultCard(ui: TankUi, settings: Settings, graph: Graph) {
-    PageColumn(26) {
+    PageColumn(20) {
         Txt(stringResource(R.string.guide_all), "result/title", style = PicoTheme.typography.headlineSmall, color = TankColors.Ink, align = TextAlign.Center, maxLines = 2, modifier = Modifier.fillMaxWidth())
         Txt(stringResource(R.string.result_sub), "result/sub", style = PicoTheme.typography.bodyMedium, color = TankColors.InkSecondary, align = TextAlign.Center, maxLines = 2, modifier = Modifier.fillMaxWidth())
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            for (k in Kind.entries) Thumb(k, k in ui.discovered, Modifier.size(84.dp).clip(RoundedCornerShape(16.dp)).background(TankColors.Card).padding(6.dp))
+        // six cards, 3 x 2 (picture + name), so the card fills the window (blank <= 25 %, D44)
+        for (row in Kind.entries.chunked(3)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                for (k in row) Column(Modifier.weight(1f).height(100.dp).clip(RoundedCornerShape(16.dp)).background(TankColors.Card).padding(6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally) {
+                    Thumb(k, k in ui.discovered, Modifier.weight(1f).fillMaxWidth())
+                    Txt(Creatures.of(k).name.get(isZh(settings)), "result/name-${k.key}", style = PicoTheme.typography.labelMedium, color = TankColors.Ink)
+                }
+            }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             PrimaryButton(stringResource(R.string.btn_keep), "result/keep", onClick = { Ui.result = false }, icon = R.drawable.ic_water_drop, modifier = Modifier.weight(1f))
@@ -332,7 +339,7 @@ private fun DetailPage(k: Kind, ui: TankUi, graph: Graph, zh: Boolean) {
     // a seen creature that is in the tank gets its name tag for 3 s (design S08b)
     LaunchedEffect(k, d != null) { if (d != null) graph.tank.showTagFromGuide(k) }
     PageColumn(12) {
-        Box(Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(20.dp)).background(TankColors.Card).padding(12.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().height(280.dp).clip(RoundedCornerShape(20.dp)).background(TankColors.Card).padding(12.dp), contentAlignment = Alignment.Center) {
             Thumb(k, d != null, Modifier.fillMaxSize())
         }
         if (d != null) {
