@@ -1,6 +1,6 @@
 # 潮汐水族 Tide Tank: project guidance
 
-A 60 cm reef tank on the desk for PICO OS 6 Shared Space (Spatial SDK BOM 6.1.9), package `io.embodit.tidetank`, v0.1.1.
+A 60 cm reef tank on the desk for PICO OS 6 Shared Space (Spatial SDK BOM 6.1.9), package `io.embodit.tidetank`, v0.1.2.
 Design contract: spatial-app-factory `apps/aquarium/design-package.json` v1.2 (gate B passed 2026-11-15 with the defaults:
 Shared Space volume, one jar cycling three foods, three tide stops, six creatures, whole-fish sway because the Tripo
 models have no rig). Skeleton from the factory's Zen Orb (volume + `Placement.right` control window, theme, sound pool,
