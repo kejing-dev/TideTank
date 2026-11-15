@@ -339,7 +339,7 @@ private fun DetailPage(k: Kind, ui: TankUi, graph: Graph, zh: Boolean) {
     // a seen creature that is in the tank gets its name tag for 3 s (design S08b)
     LaunchedEffect(k, d != null) { if (d != null) graph.tank.showTagFromGuide(k) }
     PageColumn(12) {
-        Box(Modifier.fillMaxWidth().height(280.dp).clip(RoundedCornerShape(20.dp)).background(TankColors.Card).padding(12.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().height(if (d != null) 280.dp else 340.dp).clip(RoundedCornerShape(20.dp)).background(TankColors.Card).padding(12.dp), contentAlignment = Alignment.Center) {
             Thumb(k, d != null, Modifier.fillMaxSize())
         }
         if (d != null) {
