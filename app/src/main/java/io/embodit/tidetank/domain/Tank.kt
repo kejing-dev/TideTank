@@ -417,6 +417,22 @@ class Tank(
 
     fun setTide(t: Tide, why: String) = synchronized(lock) { setTideLocked(t, why) }
 
+    /** QA #1 q1-1 (D53): a tap on the brass handle = the next stop (L -> M -> H -> L), same click as a drag release. */
+    fun handleTap(): Tide = synchronized(lock) {
+        val t = nextTide(tide)
+        log("HANDLE tap $tide -> $t")
+        onSfx(Sfx.CLICK, V3(Geo.POST_X, handleY, Geo.HANDLE_Z))
+        setTideLocked(t, "handle-tap")
+        t
+    }
+
+    /** q1-1: a tap on a gauge plate (落 / 平 / 涨) = straight to that stop. */
+    fun gaugeTap(t: Tide) = synchronized(lock) {
+        log("GAUGE tap $t (was $tide)")
+        onSfx(Sfx.CLICK, Geo.gaugeAt(t))
+        setTideLocked(t, "gauge-tap")
+    }
+
     private fun setTideLocked(t: Tide, why: String) {
         log("TIDE $tide -> $t via $why")
         if (t == tide && tidePhase == TidePhase.IDLE) { changed(); return }
@@ -858,6 +874,7 @@ class Tank(
         const val MAX_BITES = 4
         const val FULL_WINDOW = 60f
 
+        fun nextTide(t: Tide): Tide = Tide.entries[(t.ordinal + 1) % Tide.entries.size]
         fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
         fun ease(t: Float) = t * t * (3 - 2 * t)
         fun approach(v: Float, target: Float, step: Float) = if (v < target) min(target, v + step) else max(target, v - step)

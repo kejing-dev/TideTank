@@ -63,6 +63,9 @@ class DebugCommandReceiver : BroadcastReceiver() {
             "food" -> Food.parse(a.getOrNull(0))?.let { t.setFood(it, "debug") }
             "tapjar" -> Active.listener?.route(Names.JAR, null)
             "tapsign" -> Active.listener?.route(Names.SIGN, null)
+            // q1-1: a tap on the brass handle (next stop) / on a gauge plate (that stop), same route as a real tap
+            "taphandle" -> Active.listener?.route(Names.HANDLE, null)
+            "tapgauge" -> Tide.parse(a.getOrNull(0))?.let { Active.listener?.route(Names.gauge(it), null) }
             // tap <x> <z>: a tap on the tank bottom at volume metres (same route as a real tap)
             "tap" -> { val x = f(a.getOrNull(0), 0f); val z = f(a.getOrNull(1), 0f); tap(g, if (x < Geo.ROCK_TOE_X) Names.rock(1) else Names.sand(5), x, z) }
             // carry <food> <x> <z> [hold]: grab the jar, move it over (x, z) through jarMove, keep pouring; release after 3 s unless hold

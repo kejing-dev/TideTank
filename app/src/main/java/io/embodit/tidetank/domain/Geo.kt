@@ -55,9 +55,20 @@ data class Box(val lo: V3, val hi: V3) {
  * +X right, +Y up, +Z toward the user. One place: the scene, the simulation and the layout tests all read these.
  */
 object Geo {
-    // volume 0.90 x 0.56 x 0.46
-    const val VOL_W = 0.90f; const val VOL_H = 0.56f; const val VOL_D = 0.46f
-    val VOLUME = Box(V3(-0.45f, -0.28f, -0.23f), V3(0.45f, 0.28f, 0.23f))
+    /**
+     * QA #1 q1-2 (D54): the tank filled 67 % of the old 0.90 m volume and the system parks volumes ~1.75 m away (19.5 deg).
+     * The scene root is drawn [SCALE] x bigger and the volume is [VOL_W] x [SCALE] wide (manifest 1.19 x 0.78 x 0.64 m):
+     * the tank is 0.84 m (70.6 % of the volume), 27 deg at 1.75 m. Every measure below stays in tank units (the design's
+     * 60 cm tank); physical metres = tank units x [SCALE]. The jar pedestal and the tide post moved 0.5 cm inward so the
+     * volume could shrink to 0.85 units around them.
+     */
+    const val SCALE = 1.4f
+    // volume 0.85 x 0.56 x 0.46 tank units (physical 1.19 x 0.784 x 0.644 m)
+    const val VOL_W = 0.85f; const val VOL_H = 0.56f; const val VOL_D = 0.46f
+    val VOLUME = Box(V3(-VOL_W / 2, -VOL_H / 2, -VOL_D / 2), V3(VOL_W / 2, VOL_H / 2, VOL_D / 2))
+    /** Physical metres <-> tank units. */
+    fun phys(units: Float) = units * SCALE
+    fun units(metres: Float) = metres / SCALE
 
     // tank (outer 0.60 x 0.36 x 0.30, 6 mm glass, open top)
     const val TANK_X = 0.30f; const val TANK_BOT = -0.24f; const val TANK_TOP = 0.12f; const val TANK_Z = 0.15f
@@ -89,11 +100,11 @@ object Geo {
     val GATE_IN = V3(0.18f, 0.02f, -0.12f)
 
     // food jar on its pedestal (left front); carry plane
-    val PEDESTAL = Box(V3(-0.43f, -0.28f, 0.06f), V3(-0.33f, -0.22f, 0.16f))
-    val JAR_HOME = V3(-0.38f, -0.185f, 0.11f)
+    val PEDESTAL = Box(V3(-0.415f, -0.28f, 0.07f), V3(-0.335f, -0.22f, 0.15f))
+    val JAR_HOME = V3(-0.375f, -0.185f, 0.11f)
     const val JAR_BOTTOM_OFF = -0.035f   // jar model origin (bottom centre) below the jar centre
     const val CARRY_Y = 0.19f
-    const val CARRY_X0 = -0.38f; const val CARRY_X1 = 0.27f; const val CARRY_Z = 0.12f
+    const val CARRY_X0 = -0.375f; const val CARRY_X1 = 0.27f; const val CARRY_Z = 0.12f
     const val POUR_X = 0.25f; const val POUR_Z = 0.12f
     /** Jar collider 6.5 x 9 x 6.5 cm (design R1-4), centred on the jar centre. */
     const val JAR_HIT_W = 0.065f; const val JAR_HIT_H = 0.09f
@@ -103,15 +114,22 @@ object Geo {
     const val JAR_TILT_DEG = 110f
 
     // tide post (right front)
-    const val POST_X = 0.38f; const val POST_Z = 0.11f; const val POST_BOT = -0.24f; const val POST_TOP = 0.14f
-    val POST = Box(V3(0.34f, -0.24f, 0.08f), V3(0.42f, 0.14f, 0.14f))
+    const val POST_X = 0.375f; const val POST_Z = 0.11f; const val POST_BOT = -0.24f; const val POST_TOP = 0.14f
+    val POST = Box(V3(0.335f, -0.24f, 0.08f), V3(0.415f, 0.14f, 0.14f))
     const val HANDLE_Z = 0.165f
     /** Handle collider 7 x 6 x 4 cm (design R1-4). */
     const val HANDLE_HIT_W = 0.07f; const val HANDLE_HIT_H = 0.06f; const val HANDLE_HIT_D = 0.04f
     const val HANDLE_RING_R = 0.025f
     /** The small 「面板」 board on top of the post (tap = reopen the control window). */
-    val SIGN = Box(V3(0.34f, 0.14f, 0.10f), V3(0.42f, 0.185f, 0.12f))
-    val SIGN_C = V3(0.38f, 0.1625f, 0.11f)
+    val SIGN = Box(V3(0.335f, 0.14f, 0.10f), V3(0.415f, 0.185f, 0.12f))
+    val SIGN_C = V3(0.375f, 0.1625f, 0.11f)
+    /** Gauge plates 落 / 平 / 涨 (q1-1: tap = jump to that tide): quad 3.4 x 2.2 cm, collider 4.6 x 4.6 x 1 cm (6.4 cm, 2.1 deg at 1.75 m physical), left of the post. */
+    const val GAUGE_DX = -0.046f; const val GAUGE_DZ = 0.03f
+    const val GAUGE_W = 0.034f; const val GAUGE_H = 0.022f
+    const val GAUGE_HIT_W = 0.046f; const val GAUGE_HIT_H = 0.046f; const val GAUGE_HIT_D = 0.010f
+    fun gaugeAt(t: Tide) = V3(POST_X + GAUGE_DX, t.handleY, POST_Z + GAUGE_DZ)
+    /** Float on the right of the post. */
+    const val FLOAT_DX = 0.032f
 
     // name tags
     const val TAG_H = 0.036f; const val TAG_BOTTOM = 0.15f; const val TAG_Z = 0.08f; const val TAG_MAX_W = 0.18f

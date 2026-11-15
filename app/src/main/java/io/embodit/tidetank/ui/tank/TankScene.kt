@@ -9,6 +9,7 @@ import com.pico.spatial.core.ecs.DirectionalLightComponent
 import com.pico.spatial.core.ecs.DrawOrderGroup
 import com.pico.spatial.core.ecs.DrawOrderGroupComponent
 import com.pico.spatial.core.ecs.Entity
+import com.pico.spatial.core.ecs.GroundShadowComponent
 import com.pico.spatial.core.ecs.HoverEffectComponent
 import com.pico.spatial.core.ecs.InteractableComponent
 import com.pico.spatial.core.ecs.ModelComponent
@@ -62,6 +63,9 @@ object Names {
     const val JAR = "jar"
     const val HANDLE = "handle"
     const val SIGN = "sign"
+    /** Gauge plates 落 / 平 / 涨 (q1-1). */
+    fun gauge(t: Tide) = "tide:${t.name}"
+    fun tideOf(target: String): Tide? = if (target.startsWith("tide:")) Tide.parse(target.removePrefix("tide:")) else null
     const val ANEMONE = "floor:anemone"
     const val GRASS = "floor:grass"
     fun sand(i: Int) = "floor:sand:$i"
@@ -69,6 +73,7 @@ object Names {
     /** Targets: "jar", "handle", "sign", or "floor" (a tap there feeds at the hit point / cell centre). */
     fun target(name: String): String? = when {
         name == JAR || name == HANDLE || name == SIGN -> name
+        name.startsWith("tide:") && tideOf(name) != null -> name
         name.startsWith("floor:") -> name
         else -> null
     }
@@ -159,30 +164,51 @@ internal class TankScene(private val context: Context, private val graph: Graph,
     private val texCache = HashMap<String, TextureResource>()
     private val texBusy = HashSet<String>()
 
+    /** Model arrivals, attached on the ECS thread at the top of [onFrame] (q1-3: the shell never waits for a GLB). */
+    private val arrivals = java.util.concurrent.ConcurrentLinkedQueue<() -> Unit>()
+    /** Entities fading in after their model arrived: entity -> start (ms). */
+    private val appearing = HashMap<Entity, Long>()
+    private var modelsIn = 0
+    private var shellMs = 0L
+
+    /**
+     * q1-3: two steps. (1) The shell: procedural meshes + 3 small textures only (base, plaque, glass, water, sand, sea
+     * gate, floor targets, food pool, pedestal + jar holder, post marks, float, handle, board, tags, light) - shown at
+     * once, the panel leaves S00. (2) The 12 GLBs load in parallel on [scope]; each one is attached on the ECS thread when
+     * it arrives and fades in over [APPEAR_MS] (creatures swim in, the rock / plants / post / jar appear in place).
+     */
     suspend fun build() {
         val t0 = SystemClock.elapsedRealtime()
+        Log.i(TAG, "SCENE build start (process up ${t0 - android.os.Process.getStartElapsedRealtime()} ms)")
         val io = Dispatchers.IO
+        root.transform().setScaleVector(Vector3(Geo.SCALE, Geo.SCALE, Geo.SCALE))
+        val glbNames = listOf("rock", "anemone", "grass", "post", "jar_body", "jar_lid", "chromis", "clown", "tang", "crab", "seahorse", "jelly")
+        // start every model now; nothing below waits for them
+        val glbs = glbNames.associateWith { n -> scope.async { runCatching { Entity.loadSuspend("asset://models/$n.glb") }.onFailure { Log.e(TAG, "MODEL $n", it) }.getOrNull() } }
         coroutineScope {
             val meshes = async(io) {
+                val tm = SystemClock.elapsedRealtime()
                 mapOf(
                     "base" to Meshes.slab(0.64f, 0.04f, 0.34f, 1.5f), "shadow" to Meshes.slab(0.66f, 0.002f, 0.36f),
                     "glassFB" to Meshes.slab(0.60f, 0.36f, Geo.GLASS), "glassLR" to Meshes.slab(Geo.GLASS, 0.36f, 0.30f - 2 * Geo.GLASS),
                     "glassBot" to Meshes.slab(0.588f, Geo.GLASS, 0.288f),
                     "water" to Meshes.slab(2 * Geo.IN_X - 0.002f, 1f, 2 * Geo.IN_Z - 0.002f), "sand" to Meshes.slab(2 * Geo.IN_X, 0.024f, 2 * Geo.IN_Z, 1.5f),
-                    "pedestal" to Meshes.slab(0.10f, 0.06f, 0.10f, 1.5f), "deep" to Meshes.slab(0.17f, 0.13f, 0.004f, 5.8f),
+                    "pedestal" to Meshes.slab(Geo.PEDESTAL.hi.x - Geo.PEDESTAL.lo.x, 0.06f, Geo.PEDESTAL.hi.z - Geo.PEDESTAL.lo.z, 1.5f), "deep" to Meshes.slab(0.17f, 0.13f, 0.004f, 5.8f),
                     "bar" to Meshes.rod(0.0022f, 0.12f, 12), "barH" to Meshes.rod(0.0025f, 0.165f, 12),
                     "ring" to Meshes.torus(Geo.HANDLE_RING_R - 0.004f, 0.004f, sides = 16, seg = 64), "stem" to Meshes.rod(0.0035f, 0.03f, 12),
                     "chip" to Meshes.disc(0.0045f, 0f, 12), "pellet" to Meshes.bead(0.003f, 0.003f, 0.003f, 10, 6),
                     "shrimp" to Meshes.shrimp(), "bubble" to Meshes.bead(0.0018f, 0.0018f, 0.0018f, 8, 6), "dash" to Meshes.rod(0.0012f, 0.012f, 8),
                     "float" to Meshes.bead(0.006f, 0.006f, 0.006f), "quad" to Meshes.quad(1f, 1f, leftAnchored = false),
                     "sign" to Meshes.slab(0.08f, 0.045f, 0.012f, 1.5f),
-                ).mapValues { (k, m) -> m.create(k).keep() }
+                ).map { (k, m) -> async(io) { k to m.create(k).keep() } }.awaitAll().toMap()
+                    .also { Log.i(TAG, "SCENE meshes ${SystemClock.elapsedRealtime() - tm} ms (since build ${SystemClock.elapsedRealtime() - t0} ms)") }
             }
             val shapes = async(io) {
                 val phys = PhysicsMaterialResource().keep()
                 phys to mapOf(
                     "jar" to ShapeResource.createBox(Vector3(Geo.JAR_HIT_W, Geo.JAR_HIT_H, Geo.JAR_HIT_W)).keep(),
                     "handle" to ShapeResource.createBox(Vector3(Geo.HANDLE_HIT_W, Geo.HANDLE_HIT_H, Geo.HANDLE_HIT_D)).keep(),
+                    "gauge" to ShapeResource.createBox(Vector3(Geo.GAUGE_HIT_W, Geo.GAUGE_HIT_H, Geo.GAUGE_HIT_D)).keep(),
                     "sign" to ShapeResource.createBox(Vector3(0.08f, 0.045f, 0.03f)).keep(),
                     "sand" to ShapeResource.createBox(Vector3((Geo.IN_X - Geo.ROCK_TOE_X) / Names.SAND_NX, 0.01f, 2 * Geo.IN_Z / Names.SAND_NZ)).keep(),
                     "rock" to ShapeResource.createBox(Vector3((Geo.ROCK_TOE_X + Geo.IN_X) / 3, 0.02f, 2 * Geo.IN_Z)).keep(),
@@ -193,12 +219,11 @@ internal class TankScene(private val context: Context, private val graph: Graph,
             val textures = async(io) {
                 fun tex(name: String) = runCatching { context.assets.open("textures/$name").use { BitmapFactory.decodeStream(it) }.let { TextureResource.create(it).keep() } }
                     .onFailure { Log.w(TAG, "TEX $name: $it") }.getOrNull()
-                mapOf("walnut" to tex("walnut.jpg"), "sand" to tex("sand.jpg"), "deep" to tex("deep.jpg"))
+                mapOf("walnut" to tex("walnut.jpg"), "sand" to tex("sand.jpg"), "deep" to tex("deep.jpg")).also { Log.i(TAG, "SCENE textures at ${SystemClock.elapsedRealtime() - t0} ms") }
             }
-            val glbNames = listOf("chromis", "clown", "tang", "crab", "seahorse", "jelly", "rock", "anemone", "grass", "jar_body", "jar_lid", "post")
-            val glbs = glbNames.associateWith { n -> async { runCatching { Entity.loadSuspend("asset://models/$n.glb") }.onFailure { Log.e(TAG, "MODEL $n", it) }.getOrNull() } }
             awaitAll(meshes, shapes, textures)
             val ms = meshes.await(); val (phys, sh) = shapes.await(); val tx = textures.await()
+            Log.i(TAG, "SCENE resources ready at ${SystemClock.elapsedRealtime() - t0} ms")
 
             fun pbr(rgb: Int, rough: Float, metal: Float = 0f, tex: TextureResource? = null) = PhysicallyBasedMaterial.create().apply {
                 setBaseColor(rgb4(rgb)); setRoughness(rough); setMetallic(metal); tex?.let { setBaseColorTexture(it) }
@@ -242,82 +267,64 @@ internal class TankScene(private val context: Context, private val graph: Graph,
             water = model("water", clear(0x1E8FA0, 0.18f, 0.08f), "water", Entity().apply { setName("waterRoot"); root.addChild(this) }, 0f, 0f, 0f).also {
                 it.components.set(DrawOrderGroupComponent(order, 2))
             }
+            // the see-through layers never take a shadow (a shadow on a transparent body reads as a dark smear in the water)
+            for (n in tankRoot.getChildren() + listOf(water!!)) if (runCatching { n.getName() }.getOrNull()?.startsWith("glass") == true || n === water) n.components.set(GroundShadowComponent(false, false))
 
-            // ---- floor targets (taps feed there; R1-7 / R2-9)
+            // ---- floor targets (taps feed there; R1-7 / R2-9); their models arrive later
             val floor = Entity().apply { setName("floorTargets"); root.addChild(this) }
             for (i in 0 until Names.SAND_NX * Names.SAND_NZ) { val (x, z) = Names.sandCell(i); hit(Names.sand(i), sh.getValue("sand"), floor, x, Geo.SAND_Y - 0.004f, z, hover = false) }
             for (i in 0 until 3) {
                 val (x, y, _) = Names.rockCell(i)
                 hit(Names.rock(i), sh.getValue("rock"), floor, x, y - 0.012f, 0f, hover = false).transform().setQuaternion(Quat(Vector3(0f, 0f, 1f), -kotlin.math.atan(1.24f)))
             }
-            anemone = glbs.getValue("anemone").await()?.apply { setName("anemoneModel") }
-            hit(Names.ANEMONE, sh.getValue("anemone"), floor, Geo.ANEMONE.x, Geo.ANEMONE.y + 0.035f, Geo.ANEMONE.z, hover = false).also { h -> anemone?.let { h.addChild(it); it.at(0f, -0.035f, 0f) } }
+            val anemoneHit = hit(Names.ANEMONE, sh.getValue("anemone"), floor, Geo.ANEMONE.x, Geo.ANEMONE.y + 0.035f, Geo.ANEMONE.z, hover = false)
             val grassHit = hit(Names.GRASS, sh.getValue("grass"), floor, Geo.GRASS.x, Geo.GRASS.y + 0.055f, Geo.GRASS.z, hover = false)
-            glbs.getValue("grass").await()?.let { g0 ->
-                Geo.GRASS_TUFTS.forEachIndexed { i, p ->
-                    val g = if (i == 0) g0 else g0.clone(Entity.CloneOptions(true, true)) ?: return@forEachIndexed
-                    g.setName("grass$i"); grassHit.addChild(g); g.at(p.x - Geo.GRASS.x, -0.055f, p.z - Geo.GRASS.z)
-                    g.transform().setQuaternion(yawQ(rad(i * 115f)))
-                    grass += g
-                }
-            }
-            glbs.getValue("rock").await()?.let { r -> r.setName("rockModel"); tankRoot.addChild(r); r.at((-Geo.IN_X + Geo.ROCK_TOE_X) / 2 - 0.001f, Geo.IN_BOT, 0f) }
 
-            // ---- creatures
+            // ---- creatures: empty holders now, each kind's model swims in when it arrives
             val creatureRoot = Entity().apply { setName("creatureRoot"); root.addChild(this) }
-            val loaded = HashMap<Kind, Entity?>()
-            loaded[Kind.CHROMIS] = glbs.getValue("chromis").await(); loaded[Kind.CLOWN] = glbs.getValue("clown").await()
-            loaded[Kind.TANG] = glbs.getValue("tang").await(); loaded[Kind.CRAB] = glbs.getValue("crab").await()
-            loaded[Kind.SEAHORSE] = glbs.getValue("seahorse").await(); loaded[Kind.JELLY] = glbs.getValue("jelly").await()
-            val used = HashSet<Kind>()
             for (f in tank.fish) {
-                val src = loaded[f.kind] ?: continue
-                val e = if (used.add(f.kind)) src else src.clone(Entity.CloneOptions(true, true)) ?: continue
                 val holder = Entity().apply { setName("fish:${f.kind.key}:${f.idx}"); creatureRoot.addChild(this) }
-                holder.addChild(e)
                 holder.enabled = false
                 fishEnt[f] = holder
             }
-            loaded[Kind.SEAHORSE]?.walk { n -> n.components[ModelComponent::class.java]?.materials?.forEach { m -> (m as? PhysicallyBasedMaterial)?.let { seahorseMats += it } } }
 
             // ---- food pool, bubbles, drop column
             val foodRoot = Entity().apply { setName("foodRoot"); root.addChild(this) }
             val flakeMat = pbr(0x7A8A3A, 0.8f); val pelletMat = pbr(0xB0602A, 0.6f); val shrimpMat = pbr(0xF0907A, 0.5f)
             val leftMat = pbr(0x6B5A3C, 0.9f)
-            for (i in 0 until Tank.POOL) {
-                val holder = Entity().apply { setName("p$i"); foodRoot.addChild(this); enabled = false }
+            // the 120-slot food pool (600 entities, ~0.4 s) is made right after the shell is shown (nothing eats before)
+            fun makePool() = (0 until Tank.POOL).map { i ->
+                val holder = Entity().apply { setName("p$i"); enabled = false }
                 val a = ModelEntity(ms.getValue("chip"), flakeMat).apply { setName("f"); holder.addChild(this) }
                 val b = ModelEntity(ms.getValue("pellet"), pelletMat).apply { setName("q"); holder.addChild(this) }
                 val c = ModelEntity(ms.getValue("shrimp"), shrimpMat).apply { setName("s"); holder.addChild(this); transform().setScaleVector(Vector3(1.5f, 1.5f, 1.5f)) }
                 val d = ModelEntity(ms.getValue("pellet"), leftMat).apply { setName("l"); holder.addChild(this); transform().setScaleVector(Vector3(0.8f, 0.5f, 0.8f)) }
-                slots += arrayOf(holder, a, b, c, d)
+                // q1 small (dark see-through smear after feeding): food grains cast no shadow onto the see-through water / glass
+                for (m in listOf(a, b, c, d)) m.components.set(GroundShadowComponent(false, false))
+                arrayOf(holder, a, b, c, d)
             }
             val bubbleMat = clear(0xE8FBFF, 0.55f, 0.1f)
-            repeat(30) { bubbleEnts += ModelEntity(ms.getValue("bubble"), bubbleMat).apply { setName("bubble$it"); foodRoot.addChild(this); enabled = false } }
+            repeat(30) { bubbleEnts += ModelEntity(ms.getValue("bubble"), bubbleMat).apply { setName("bubble$it"); foodRoot.addChild(this); enabled = false; components.set(GroundShadowComponent(false, false)) } }
             val dashMat = UnlitMaterial.create(BlendingMode.OPAQUE).apply { setBaseColor(rgb4(0xF6F1E0)); setApplyToneMapping(false) }.keep()
-            repeat(12) { dashes += ModelEntity(ms.getValue("dash"), dashMat).apply { setName("dash$it"); foodRoot.addChild(this); enabled = false } }
+            repeat(12) { dashes += ModelEntity(ms.getValue("dash"), dashMat).apply { setName("dash$it"); foodRoot.addChild(this); enabled = false; components.set(GroundShadowComponent(false, false)) } }
 
-            // ---- jar on its pedestal
+            // ---- jar on its pedestal (the holder + collider now; body and lid arrive later)
             val jarRoot = Entity().apply { setName("jarRoot"); root.addChild(this) }
             model("pedestal", walnut, "pedestal", jarRoot, Geo.PEDESTAL.centre.x, Geo.PEDESTAL.centre.y, Geo.PEDESTAL.centre.z)
             val jh = hit(Names.JAR, sh.getValue("jar"), jarRoot, Geo.JAR_HOME.x, Geo.JAR_HOME.y, Geo.JAR_HOME.z)
             val jm = Entity().apply { setName("jarModel"); jh.addChild(this); at(0f, Geo.JAR_BOTTOM_OFF, 0f) }
-            glbs.getValue("jar_body").await()?.let { it.setName("jarBody"); jm.addChild(it) }
-            glbs.getValue("jar_lid").await()?.let { lid ->
-                lid.setName("jarLid"); jm.addChild(lid)
-                lid.walk { n -> n.components[ModelComponent::class.java]?.materials?.forEach { m -> (m as? PhysicallyBasedMaterial)?.let { lidMats += it } } }
-            }
             jarHolder = jh; jarModel = jm
 
-            // ---- tide post, gauge marks, float, handle, sign
+            // ---- tide post, gauge plates (q1-1: each one a tap target), float, handle, sign
             val tideRoot = Entity().apply { setName("tideRoot"); root.addChild(this) }
-            glbs.getValue("post").await()?.let { p -> p.setName("postModel"); tideRoot.addChild(p); p.at(Geo.POST_X, Geo.POST_BOT, Geo.POST_Z) }
             for (t in Tide.entries) {
                 val m = unlitText()
                 gaugeMats += m to t
-                model("quad", m, "gauge:${t.name}", tideRoot, Geo.POST_X - 0.046f, t.handleY, Geo.POST_Z + 0.03f).transform().setScaleVector(Vector3(0.034f, 0.022f, 1f))
+                val g = Geo.gaugeAt(t)
+                val plate = hit(Names.gauge(t), sh.getValue("gauge"), tideRoot, g.x, g.y, g.z)
+                model("quad", m, "gaugeWords:${t.name}", plate, 0f, 0f, Geo.GAUGE_HIT_D / 2 + 0.0005f).transform().setScaleVector(Vector3(Geo.GAUGE_W, Geo.GAUGE_H, 1f))
             }
-            floatEnt = model("float", pbr(0xC0392B, 0.4f), "gaugeFloat", tideRoot, Geo.POST_X + 0.04f, gaugeY(tank.level), Geo.POST_Z + 0.01f)
+            floatEnt = model("float", pbr(0xC0392B, 0.4f), "gaugeFloat", tideRoot, Geo.POST_X + Geo.FLOAT_DX, gaugeY(tank.level), Geo.POST_Z + 0.01f)
             val hh = hit(Names.HANDLE, sh.getValue("handle"), tideRoot, Geo.POST_X, tank.handleY, Geo.HANDLE_Z)
             model("ring", brass, "handleRing", hh, 0f, 0f, 0f).transform().setQuaternion(Quat(Vector3(1f, 0f, 0f), rad(90f)))
             model("stem", brass, "handleStem", hh, 0f, Geo.HANDLE_RING_R - 0.002f, -0.03f).transform().setQuaternion(Quat(Vector3(1f, 0f, 0f), rad(90f)))
@@ -334,12 +341,84 @@ internal class TankScene(private val context: Context, private val graph: Graph,
             for (k in Kind.entries) { val m = unlitText(); tagMat[k] = m; tagEnt[k] = model("quad", m, "tag:${k.key}", tagRoot, 0f, Geo.TAG_BOTTOM + Geo.TAG_H / 2, Geo.TAG_Z).apply { enabled = false } }
 
             buildLight()
+
+            scope.launch {
+                kotlinx.coroutines.yield()
+                val pool = makePool()
+                arrivals += { pool.forEach { foodRoot.addChild(it[0]) }; slots += pool; Log.i(TAG, "SCENE food pool in at ${SystemClock.elapsedRealtime() - t0} ms") }
+            }
+
+            // ---- step 2: attach each model as it arrives (prepared here on the main thread, attached in onFrame)
+            fun arrive(n: String, prepare: (Entity) -> (() -> Unit)) {
+                scope.launch {
+                    val e = glbs.getValue(n).await() ?: return@launch
+                    val attach = prepare(e)
+                    arrivals += {
+                        attach()
+                        modelsIn++
+                        Log.i(TAG, "MODEL $n in at ${SystemClock.elapsedRealtime() - t0} ms ($modelsIn/${glbNames.size})")
+                        if (modelsIn == glbNames.size) Log.i(TAG, "SCENE all models in ${SystemClock.elapsedRealtime() - t0} ms (shell ${shellMs} ms)")
+                    }
+                }
+            }
+            arrive("rock") { r -> { r.setName("rockModel"); tankRoot.addChild(r); r.at((-Geo.IN_X + Geo.ROCK_TOE_X) / 2 - 0.001f, Geo.IN_BOT, 0f); appear(r) } }
+            arrive("anemone") { a -> { a.setName("anemoneModel"); anemoneHit.addChild(a); a.at(0f, -0.035f, 0f); anemone = a; appear(a) } }
+            arrive("grass") { g0 ->
+                val tufts = Geo.GRASS_TUFTS.indices.mapNotNull { i -> if (i == 0) g0 else g0.clone(Entity.CloneOptions(true, true)) }
+                ({
+                    tufts.forEachIndexed { i, g ->
+                        val p = Geo.GRASS_TUFTS[i]
+                        g.setName("grass$i"); grassHit.addChild(g); g.at(p.x - Geo.GRASS.x, -0.055f, p.z - Geo.GRASS.z)
+                        g.transform().setQuaternion(yawQ(rad(i * 115f)))
+                        grass += g; appear(g)
+                    }
+                })
+            }
+            arrive("post") { p -> { p.setName("postModel"); tideRoot.addChild(p); p.at(Geo.POST_X, Geo.POST_BOT, Geo.POST_Z); appear(p) } }
+            arrive("jar_body") { b -> { b.setName("jarBody"); jm.addChild(b); appear(b) } }
+            arrive("jar_lid") { lid ->
+                val mats = ArrayList<PhysicallyBasedMaterial>()
+                lid.walk { n -> n.components[ModelComponent::class.java]?.materials?.forEach { m -> (m as? PhysicallyBasedMaterial)?.let { mats += it } } }
+                ({ lid.setName("jarLid"); jm.addChild(lid); lidMats += mats; shownFood = null; shownGlow = -1f; appear(lid) })
+            }
+            for ((n, k) in listOf("chromis" to Kind.CHROMIS, "clown" to Kind.CLOWN, "tang" to Kind.TANG, "crab" to Kind.CRAB, "seahorse" to Kind.SEAHORSE, "jelly" to Kind.JELLY)) {
+                arrive(n) { src ->
+                    val mine = tank.fish.filter { it.kind == k }
+                    val copies = mine.mapIndexedNotNull { i, f -> (if (i == 0) src else src.clone(Entity.CloneOptions(true, true)))?.let { f to it } }
+                    val mats = ArrayList<PhysicallyBasedMaterial>()
+                    if (k == Kind.SEAHORSE) src.walk { e -> e.components[ModelComponent::class.java]?.materials?.forEach { m -> (m as? PhysicallyBasedMaterial)?.let { mats += it } } }
+                    ({
+                        for ((f, e) in copies) { fishEnt[f]?.addChild(e); appear(e) }
+                        if (mats.isNotEmpty()) { seahorseMats += mats; seahorseTint = -1f }
+                    })
+                }
+            }
         }
+        shellMs = SystemClock.elapsedRealtime() - t0
         built = true
         startMs = SystemClock.elapsedRealtime()
         android.os.Handler(android.os.Looper.getMainLooper()).post { graph.sceneReady = true }
-        Log.i(TAG, "SCENE built in ${SystemClock.elapsedRealtime() - t0} ms fish=${fishEnt.size} slots=${slots.size}")
+        Log.i(TAG, "SCENE shell (glass, water, sand, base) in $shellMs ms fish=${fishEnt.size} slots=${slots.size}; models load on")
         prewarm()
+    }
+
+    /** Fade a just-attached model in (q1-3). */
+    private fun appear(e: Entity) {
+        e.components.set(OpacityControllerComponent(0.02f))
+        appearing[e] = SystemClock.elapsedRealtime()
+    }
+
+    /** Drains model arrivals and steps their fade (ECS thread). */
+    private fun arrivalsFrame(nowMs: Long) {
+        while (true) { val a = arrivals.poll() ?: break; runCatching { a() }.onFailure { Log.w(TAG, "MODEL attach: $it") } }
+        if (appearing.isEmpty()) return
+        val it = appearing.entries.iterator()
+        while (it.hasNext()) {
+            val (e, t) = it.next()
+            val k = ((nowMs - t) / APPEAR_MS.toFloat()).coerceIn(0f, 1f)
+            // opacity 1.0 is removed, never left on (build.md 2026-10-29: a 1.0 opacity component still blends)
+            if (k >= 1f) { e.components.remove(OpacityControllerComponent::class.java); it.remove() } else e.components.set(OpacityControllerComponent(k.coerceAtLeast(0.02f)))
+        }
     }
 
     /** Gauge float height for a water level (L / M / H marks line up with the handle marks). */
@@ -406,6 +485,7 @@ internal class TankScene(private val context: Context, private val graph: Graph,
         if (!built) return
         frames++
         val nowMs = SystemClock.elapsedRealtime()
+        arrivalsFrame(nowMs)
         if (nowMs - fpsT0 >= 5000) { fps = frames * 1000f / (nowMs - fpsT0); Log.i(TAG, "PERF fps=${"%.1f".format(fps)} state=${tank.state} particles=${tank.particles.count { it.alive }}"); frames = 0; fpsT0 = nowMs }
         if (graph.loaded) tank.tick(dt)
         val zh = isZh(graph.settings.value)
@@ -417,7 +497,7 @@ internal class TankScene(private val context: Context, private val graph: Graph,
                 val h = tank.level - Geo.IN_BOT
                 w.at(0f, Geo.IN_BOT + h / 2, 0f); w.transform().setScaleVector(Vector3(1f, h, 1f))
             }
-            floatEnt?.at(Geo.POST_X + 0.04f, gaugeY(tank.level), Geo.POST_Z + 0.01f)
+            floatEnt?.at(Geo.POST_X + Geo.FLOAT_DX, gaugeY(tank.level), Geo.POST_Z + 0.01f)
             handleHolder?.at(Geo.POST_X, tank.handleY, Geo.HANDLE_Z)
             // grille: fades out (open) / in (closed), never moves (design seaGate)
             grille?.let { g ->
@@ -454,7 +534,7 @@ internal class TankScene(private val context: Context, private val graph: Graph,
             }
             // food
             for (p in tank.particles) {
-                val s = slots[p.id]
+                val s = slots.getOrNull(p.id) ?: continue
                 if (s[0].enabled != p.alive) s[0].enabled = p.alive
                 if (!p.alive) continue
                 s[0].at(p.pos.x, p.pos.y, p.pos.z)
@@ -554,6 +634,8 @@ internal class TankScene(private val context: Context, private val graph: Graph,
 
     companion object {
         const val LIGHT_LUX = 1600f
+        /** Fade-in of a model that just arrived (q1-3). */
+        const val APPEAR_MS = 700L
         @Suppress("unused") private fun nearly(a: Float, b: Float) = abs(a - b) < 1e-4f
         @Suppress("unused") private val unusedMesh: MeshResource? = null
     }

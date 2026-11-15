@@ -1,5 +1,11 @@
 package io.embodit.tidetank.ui.control
 
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -162,7 +168,22 @@ internal fun VolumeSlider(level: Int, onChange: (Int) -> Unit, modifier: Modifie
     var pos by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(level.toFloat()) }
     val cb = androidx.compose.runtime.rememberUpdatedState(onChange)
     androidx.compose.runtime.LaunchedEffect(level) { drag.sync(level); pos = drag.pos }
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+    // QA #1 (small): the bar had no accessible name and a11y step forward / back (0.1) was swallowed. The row speaks as one
+    // control: 「音量 · 50%」, range 0..2 with one step between, so a step / set_progress moves exactly one stop.
+    val name = androidx.compose.ui.res.stringResource(io.embodit.tidetank.R.string.set_volume)
+    val pct = io.embodit.tidetank.domain.Settings.VOLUME_PCT[level.coerceIn(0, 2)]
+    Row(modifier.clearAndSetSemantics {
+        contentDescription = name
+        stateDescription = "$pct%"
+        progressBarRangeInfo = ProgressBarRangeInfo(level.toFloat(), 0f..2f, steps = 1)
+        setProgress { v ->
+            val n = kotlin.math.round(v).toInt().coerceIn(0, 2)
+            Log.i(TAG, "VOLUME a11y $n")
+            drag.sync(n); pos = n.toFloat()
+            if (n != level) cb.value(n)
+            true
+        }
+    }, verticalAlignment = Alignment.CenterVertically) {
         Slider(
             value = pos,
             onValueChange = { v -> val changed = drag.move(v); pos = drag.pos; if (changed != null) { Log.i(TAG, "VOLUME live $changed"); cb.value(changed) } },

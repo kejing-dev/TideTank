@@ -21,6 +21,7 @@ import com.pico.spatial.ui.foundation.dsl.registerSystem
 import com.pico.spatial.ui.foundation.dsl.unregisterSystem
 import com.pico.spatial.ui.geometry.Offset3D
 import com.pico.spatial.ui.platform.containers.LocalSpatialNavigator
+import io.embodit.tidetank.domain.Geo
 import io.embodit.tidetank.domain.V3
 import io.embodit.tidetank.platform.Graph
 import io.embodit.tidetank.platform.TAG
@@ -132,6 +133,8 @@ internal class TankListener(private val graph: Graph, private val scene: TankSce
     /** The view's local px -> volume metres (root frame). */
     private fun toVolume(position: Offset3D): Vector3? = content?.let { c ->
         runCatching { c.convertPosition(Vector3(position.x, position.y, position.z), ViewCoordinateSpace.Local, c.localSpatialCoordinateSpace) }.getOrNull()
+            // the scene root is drawn Geo.SCALE x (q1-2): content metres -> tank units
+            ?.let { Vector3(Geo.units(it.x), Geo.units(it.y), Geo.units(it.z)) }
     }
 
     override fun onPress(target: String?, source: InputSource, position: Offset3D) {
@@ -141,7 +144,8 @@ internal class TankListener(private val graph: Graph, private val scene: TankSce
             val q = c.convertPosition(Vector3(position.x + 1000f, position.y, position.z), ViewCoordinateSpace.Local, c.localSpatialCoordinateSpace)
             val perPxEntity = hypot(q.x - p.x, hypot(q.y - p.y, q.z - p.z)) / 1000f
             val perPxPhysical = scene.metersPerPx
-            scale = if (perPxPhysical > 0f) (perPxEntity / perPxPhysical).coerceIn(0.3f, 3f) else 1f
+            // physical hand metres -> content metres (system resize) -> tank units (root drawn Geo.SCALE x, q1-2)
+            scale = dragScale(perPxEntity, perPxPhysical)
             BoardInputLog.write(TAG, "INPUT press src=${source.label} target=$target at=(${"%.3f".format(p.x)}, ${"%.3f".format(p.y)}, ${"%.3f".format(p.z)}) scale=${"%.2f".format(scale)}")
         }.onFailure { Log.w(TAG, "INPUT press convert failed: $it") }
     }
@@ -157,7 +161,8 @@ internal class TankListener(private val graph: Graph, private val scene: TankSce
             target == null -> Unit
             target == Names.JAR -> graph.tank.nextFood("jar-tap")
             target == Names.SIGN -> graph.window.recall("sign")
-            target == Names.HANDLE -> Unit
+            target == Names.HANDLE -> graph.tank.handleTap()
+            Names.tideOf(target) != null -> graph.tank.gaugeTap(Names.tideOf(target)!!)
             target.startsWith("floor:") -> {
                 val (x, z) = hitXZ ?: Names.centreOf(target) ?: return
                 graph.tank.tapFeed(x, z, "tap:$target")
@@ -172,7 +177,7 @@ internal class TankListener(private val graph: Graph, private val scene: TankSce
             Names.HANDLE -> if (graph.tank.handleGrab()) Names.HANDLE else null
             else -> null
         }
-        jarFrom = V3(io.embodit.tidetank.domain.Geo.JAR_HOME.x, 0f, io.embodit.tidetank.domain.Geo.JAR_HOME.z)
+        jarFrom = V3(Geo.JAR_HOME.x, 0f, Geo.JAR_HOME.z)
         BoardInputLog.write(TAG, "INPUT drag start src=${source.label} target=$target taken=${drag != null}")
         return drag != null
     }
@@ -196,7 +201,7 @@ internal class TankListener(private val graph: Graph, private val scene: TankSce
         drag = null
     }
 
-    /** Hover is drawn by the system (HoverEffectComponent on the jar, handle and board); nothing in the game changes. */
+    /** Hover is drawn by the system (HoverEffectComponent on the jar, handle, gauge plates and board); nothing in the game changes. */
     override fun onHover(target: String?, source: InputSource) {}
 
     /** Debug: a real drag through the same calls ([pts] = jar targets x, z or handle travel). */
@@ -209,5 +214,9 @@ internal class TankListener(private val graph: Graph, private val scene: TankSce
     companion object {
         /** The jar travels 0.65 m; a comfortable hand sweep is ~0.4 m: a small gain (1.5x) on the hand travel. */
         const val JAR_GAIN = 1.5f
+
+        /** Hand travel (physical m) -> tank units: x content/physical per px, / the root scale. */
+        fun dragScale(perPxEntity: Float, perPxPhysical: Float): Float =
+            (if (perPxPhysical > 0f) (perPxEntity / perPxPhysical).coerceIn(0.3f, 3f) else 1f) / Geo.SCALE
     }
 }

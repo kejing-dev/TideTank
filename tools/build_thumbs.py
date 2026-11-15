@@ -16,7 +16,9 @@ MAP = {"chromis": "chromis", "clown": "clownfish", "tang": "bluetang", "crab": "
 for src, kind in MAP.items():
     im = np.asarray(Image.open(os.path.join(DESIGN, f"tripo-{src}-A.jpg")).convert("RGB")).astype(float)
     h, w, _ = im.shape
-    im = im[40:h - 70, 40:w - 140]   # drop the viewer's top-right label and bottom toolbar
+    # drop the viewer's top-right label (top 40 rows) and bottom toolbar; the right trim is per picture: the crab's legs
+    # reach x ~ 800 of 911, a 140 px trim cut its right side flat (QA #1 small)
+    im = im[40:h - 70, 40:w - (40 if src == "crab" else 140)]
     mx = im.max(axis=2); mn = im.min(axis=2)
     sat = mx - mn
     mask = (sat > 22) | (mx > 105)

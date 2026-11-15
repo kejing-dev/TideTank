@@ -98,7 +98,15 @@ class Graph(context: Context) {
         }
         scope.launch(Dispatchers.IO) {
             val t0 = SystemClock.elapsedRealtime()
-            if (context.getSharedPreferences("debug", Context.MODE_PRIVATE).getBoolean("s00hold", false)) { Log.i(TAG, "S00 hold 12 s"); delay(12_000) }
+            // debug S00 capture: hold the save load (not the tank shell) until `s00hold off` or 60 s (QA #1: a 12 s hold ran out
+            // before the slow capture channel shot, S00-zh was really S12)
+            val dbg = context.getSharedPreferences("debug", Context.MODE_PRIVATE)
+            if (dbg.getBoolean("s00hold", false)) {
+                Log.i(TAG, "S00 hold until s00hold off (max 60 s)")
+                var waited = 0
+                while (waited < 60_000 && context.getSharedPreferences("debug", Context.MODE_PRIVATE).getBoolean("s00hold", false)) { delay(200); waited += 200 }
+                Log.i(TAG, "S00 hold released after $waited ms")
+            }
             val saved = store.load()
             tank.restore(saved ?: Saved())
             lastSaved = saved
@@ -221,7 +229,7 @@ class SoundPlayer(private val context: Context) {
         val j = if (s == Sfx.DISCOVER || s == Sfx.ALLFOUND || s == Sfx.TIDE) 0f else 0.05f
         val rate = 1f - j + random.nextFloat() * 2 * j
         // simple stereo placement by x (the volume is 0.9 m wide)
-        val pan = (at.x / 0.45f).coerceIn(-1f, 1f) * 0.5f
+        val pan = (at.x / (io.embodit.tidetank.domain.Geo.VOL_W / 2)).coerceIn(-1f, 1f) * 0.5f
         val g = gain() * LEVEL.getValue(s)
         synchronized(playing) {
             if (s in ONE_AT_A_TIME) playing.remove(s)?.let { pool.stop(it) }

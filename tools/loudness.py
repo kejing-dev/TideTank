@@ -56,6 +56,10 @@ def main():
         rows.append(f"{n:10s} voiced RMS {r:6.1f} dBFS  peak {p:6.1f} dBFS")
         parts += [trim_quiet(x), np.zeros(int(0.05 * SR))]
     seq = np.concatenate(parts)
+    # design sound.loudness asks for 30 s (QA #1: the v0.1.0 file was 6.7 s): the feeding round repeats, cut at 30.0 s
+    one = seq
+    while len(seq) < 30 * SR: seq = np.concatenate([seq, np.zeros(int(0.4 * SR)), one])
+    seq = seq[: 30 * SR]
     save(os.path.join(out, f"loudness-{ver}.wav"), seq)
     r, p = voiced(seq)
     t = load("bite") * VOL * LEVEL["bite"]
@@ -67,7 +71,7 @@ def main():
     save(os.path.join(out, f"burst-{ver}.wav"), burst)
     br, bp = voiced(burst)
     print("\n".join(rows))
-    print(f"loudness-{ver}.wav voiced RMS {r:.1f} dBFS peak {p:.1f} dBFS (rendered at volume 中 = {VOL})")
+    print(f"loudness-{ver}.wav {len(seq) / SR:.1f} s voiced RMS {r:.1f} dBFS peak {p:.1f} dBFS (rendered at volume 中 = {VOL})")
     print(f"burst-{ver}.wav 5 bites / 80 ms peak {bp:.1f} dBFS")
 
 

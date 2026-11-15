@@ -16,7 +16,7 @@ import io.embodit.tidetank.ui.theme.TankTheme
 
 /**
  * Two surfaces in Shared Space (design windowModel volume_plus_control_window): the tank volume (default container,
- * 0.90 x 0.56 x 0.46 m from the manifest) and the control window (Planar 600 x 600 dp, fixed: min = max, R2-5) to its
+ * 1.19 x 0.784 x 0.644 m from the manifest = 0.85 x 0.56 x 0.46 tank units x Geo.SCALE) and the control window (Planar 600 x 600 dp, fixed: min = max, R2-5) to its
  * right. Every open uses Placement.right(volume) (D44: Shared Space never promises "in front of you").
  */
 fun mainApp(scope: SpatialAppScope) =

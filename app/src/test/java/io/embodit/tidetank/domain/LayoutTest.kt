@@ -19,7 +19,8 @@ import kotlin.math.sin
  */
 class LayoutTest {
     private val inner = Box(V3(Geo.VOLUME.lo.x, Geo.VOLUME.lo.y, Geo.VOLUME.lo.z), V3(Geo.VOLUME.hi.x, Geo.VOLUME.hi.y, Geo.VOLUME.hi.z))
-    private val margin = 0.01f
+    /** 1 cm of physical margin, in tank units (the scene root is drawn Geo.SCALE x, q1-2). */
+    private val margin = Geo.units(0.01f)
 
     /** Shipped model boxes after calibration (tools/build_models.py writes this file). */
     private val models: JSONObject = JSONObject(File("../tools/model_bounds.json").let { if (it.exists()) it else File("tools/model_bounds.json") }.readText())
@@ -137,7 +138,7 @@ class LayoutTest {
     @Test fun tagsGaugeMarksHandleBoardAndPlaqueAreNotBehindTheTankFromAnyEye() {
         val targets = mutableListOf<Pair<String, V3>>()
         for (x in listOf(-0.23f, 0f, 0.23f)) for (dx in listOf(-0.08f, 0.08f)) for (dy in listOf(0f, Geo.TAG_H)) targets += "tag $x" to V3(x + dx, Geo.TAG_BOTTOM + dy, Geo.TAG_Z)
-        for (t in Tide.entries) targets += "mark $t" to V3(Geo.POST_X - 0.046f, t.handleY, Geo.POST_Z + 0.03f)
+        for (t in Tide.entries) targets += "mark $t" to Geo.gaugeAt(t)
         for (t in Tide.entries) targets += "handle $t" to V3(Geo.POST_X, t.handleY, Geo.HANDLE_Z)
         targets += "sign" to Geo.SIGN_C
         targets += "jar" to Geo.JAR_HOME
@@ -165,5 +166,43 @@ class LayoutTest {
         // tag text height >= 0.5 deg at the seated eye (D13 3D words)
         assertTrue(Math.toDegrees(atan2(Geo.TAG_TEXT_H.toDouble(), 0.85)) >= 0.5)
         assertTrue(abs(Geo.tagWidth("Green chromis") - 0.163f) < 0.02f && Geo.tagWidth("Green chromis") <= Geo.TAG_MAX_W)
+    }
+
+    // ---------------------------------------------------------------- QA #1 q1-2 (D54): the tank fills the volume
+    @Test fun theTankFillsTheVolumeAndIsBigEnoughAtTheSystemDistance() {
+        val volW = Geo.phys(Geo.VOL_W); val volH = Geo.phys(Geo.VOL_H); val volD = Geo.phys(Geo.VOL_D)
+        // manifest default size = the tank-unit volume x SCALE
+        val manifest = File("src/main/AndroidManifest.xml").let { if (it.exists()) it else File("app/src/main/AndroidManifest.xml") }.readText()
+        val size = Regex("windowcontainer.defaultsize\"\\s*android:value=\"([0-9.]+)x([0-9.]+)x([0-9.]+)\"").find(manifest)!!.groupValues
+        assertEquals(volW, size[1].toFloat(), 0.002f); assertEquals(volH, size[2].toFloat(), 0.002f); assertEquals(volD, size[3].toFloat(), 0.002f)
+        val tankW = Geo.phys(2 * Geo.TANK_X)
+        assertTrue("longest edge ${tankW / volW}", tankW / volW >= 0.70f)
+        assertTrue("shortest edge ${Geo.phys(2 * Geo.TANK_Z) / volD}", Geo.phys(2 * Geo.TANK_Z) / volD >= 0.50f)
+        // the system parks a volume ~1.75 m away (QA #1 logcat ContainerTransformSolver z = -1.75)
+        val deg = Math.toDegrees(2 * atan2(tankW / 2.0, 1.75)).toFloat()
+        assertTrue("tank $deg deg at 1.75 m", deg >= 25f)
+    }
+
+    @Test fun everythingKeepsOnePhysicalCentimetreFromTheVolumeWalls() {
+        // same boxes as above, measured in physical metres
+        val vol = Box(V3(-Geo.phys(Geo.VOL_W) / 2, -Geo.phys(Geo.VOL_H) / 2, -Geo.phys(Geo.VOL_D) / 2), V3(Geo.phys(Geo.VOL_W) / 2, Geo.phys(Geo.VOL_H) / 2, Geo.phys(Geo.VOL_D) / 2))
+        for ((n, b) in fixedBoxes() + Tide.entries.associate { "gauge $it" to Geo.gaugeAt(it).let { g -> Box.of(g.x, g.y, g.z, Geo.GAUGE_HIT_W, Geo.GAUGE_HIT_H, Geo.GAUGE_HIT_D) } }) {
+            val p = Box(b.lo * Geo.SCALE, b.hi * Geo.SCALE)
+            val lifted = if (b.lo.y <= Geo.VOLUME.lo.y + 1e-4f) Box(V3(p.lo.x, vol.lo.y + 0.0101f, p.lo.z), p.hi) else p
+            assertTrue("$n $p", lifted.inside(vol, 0.01f))
+        }
+    }
+
+    @Test fun gaugePlatesAndHandleAreTappableTargetsAtTheSystemDistance() {
+        // D17: >= 4 cm and >= 2 deg at 1.75 m (physical), gaps >= 1.5 cm between the plates
+        for ((n, s) in listOf("gauge w" to Geo.GAUGE_HIT_W, "gauge h" to Geo.GAUGE_HIT_H, "handle" to Geo.HANDLE_HIT_H, "jar" to Geo.JAR_HIT_W)) {
+            val m = Geo.phys(s); val deg = Math.toDegrees(2 * atan2(m / 2.0, 1.75)).toFloat()
+            assertTrue("$n ${m * 100} cm", m >= 0.04f); assertTrue("$n $deg deg", deg >= 2f)
+        }
+        val ys = Tide.entries.map { it.handleY }
+        for (i in 1 until ys.size) assertTrue("gap", Geo.phys(ys[i] - ys[i - 1] - Geo.GAUGE_HIT_H) >= 0.015f)
+        // a plate never sits inside the handle's collider depth (the handle is in front, the plate stays reachable)
+        val handleBack = Geo.HANDLE_Z - Geo.HANDLE_HIT_D / 2; val plateFront = Geo.gaugeAt(Tide.M).z + Geo.GAUGE_HIT_D / 2
+        assertTrue("$plateFront < $handleBack", plateFront <= handleBack + 1e-4f)
     }
 }
