@@ -1,5 +1,24 @@
 # Changelog · 更新记录
 
+## v0.1.3 · 2026-11-16 (gate C · the jar is a toggle, Full Space)
+
+中文：
+- 饲料罐改成「按一下拿起、再按一下放回」：手 / 手柄碰到罐子按 grip 或扳机拿起，远处手柄射线或眼手指着按一下也能拿；松开按键不会掉
+- 拿着时每帧跟随：直接拿的跟手 / 手柄走，远处拿的按手柄（或捏住的手）的平移在水面上方左右前后移动（1:1，限在缸口内）
+- 翻手倒食物：手腕 / 手柄转过约 60° 开始撒，转得越多撒得越多，食物从罐口正下方落下
+- 拿起时罐子旁出 3D 提示卡（中英）「翻手倒食物 · 再按 grip / 扳机放回」，第一次放回后收起；「怎么玩」改成这三步 + 潮汐 + 发现
+- 改到 Full Space（混合现实 Stage）：缸按头的水平朝向摆在正前方、控制窗下面；设置里 [叫回面前]；摇杆左右转缸；退出时关控制窗和 Stage
+- 换饲料只在面板上（点罐子现在是拿起）
+
+English:
+- The food jar is a toggle (profile D53): touch it and press grip or trigger, or point the controller ray / eye-hand at it
+  and press once; letting go keeps it in your hand; the next press puts it back
+- Held: a touched jar follows the hand in 6DoF; a jar picked from afar moves 1:1 with the hand's translation over the water
+- Turn the wrist / controller past ~60 deg to pour; more turn, more food; food falls straight under the mouth
+- A bilingual 3D tip beside the jar until the first put-back; the how-to card shows the three steps
+- Full Space (Mixed Stage): the tank is placed yaw-only in front of you under the control window; [Bring it back here];
+  thumbstick turns the tank; exit closes the window and the Stage
+
 ## v0.1.2 · 2026-11-15 (QA #2 rework · first release)
 
 中文：

@@ -1,62 +1,115 @@
 package io.embodit.tidetank.domain
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
- * q2-1 (QA #2): the control window's four corners are inside the default view for a standing and a seated eye, it is
- * no more than 40 deg below the eye line (D14), it does not cover the tank, and the v0.1.1 placement (right of the
- * 1.19 m volume) is shown to fail the same check (the regression this replaces).
+ * v0.1.3 Full Space (门 C 改, D53 补 / D54 坐姿 / D9 placeUpright / D14 / D29): the tank is placed yaw-only from the
+ * head pose, under the control window that the system opens straight ahead of a level head.
  */
 class ControlPlacementTest {
-    private val eyes = mapOf("standing" to 1.6f, "seated" to 1.2f)
-
-    @Test fun shippedPlacementIsBelowTheVolumeAt600x440() {
-        assertEquals(ControlPlacement.Side.BOTTOM, ControlPlacement.SIDE)
-        assertEquals(600f, ControlPlacement.WINDOW_W_DP)
-        assertEquals(440f, ControlPlacement.WINDOW_H_DP)
+    private fun fwd(yawDeg: Float, pitchDeg: Float = 0f): V3 {
+        val y = Math.toRadians(yawDeg.toDouble()); val p = Math.toRadians(pitchDeg.toDouble())
+        return V3((-sin(y) * cos(p)).toFloat(), sin(p).toFloat(), (-cos(y) * cos(p)).toFloat())
     }
 
-    @Test fun fourCornersInTheDefaultViewSeatedAndStanding() {
-        for ((name, eyeH) in eyes) {
-            // Shared Space places the volume (and so the window) relative to the head: same eye-space corners at any height
-            for (c in ControlPlacement.corners(ControlPlacement.Side.BOTTOM)) {
-                val (yaw, pitch) = ControlPlacement.angles(c)
-                assertTrue("$name corner $c yaw=$yaw pitch=$pitch", ControlPlacement.inDefaultView(c))
-                assertTrue("$name corner $pitch deg below > 40 (D14)", -pitch <= ControlPlacement.MAX_DOWN_DEG)
-                val floorClear = eyeH + c.y
-                assertTrue("$name corner ${floorClear} m above the floor", floorClear > 0.2f)
+    @Test fun tankUnderTheWindowStandingAndSeated() {
+        for (eyeY in listOf(1.6f, 1.2f)) for (yaw in listOf(0f, 90f, 180f, -90f, 33f)) {
+            val eye = V3(0.3f, eyeY, -0.2f)
+            val root = ControlPlacement.placeTank(eye, fwd(yaw))!!
+            val bad = ControlPlacement.tankClearsWindow(eye, root)
+            assertTrue("eye $eyeY yaw $yaw: $bad", bad.isEmpty())
+            assertTrue("centre in the default view", ControlPlacement.tankCentreInView(eye, root))
+            // base off the floor (seated 1.2 m eye: the tank still stands on something like a low table)
+            val baseY = root.toStage(Geo.BASE.lo).y
+            assertTrue("eye $eyeY base at $baseY", baseY >= 0.45f)
+        }
+    }
+
+    @Test fun placeUprightIgnoresPitchAndRoll() {
+        val eye = V3(0f, 1.6f, 0f)
+        val level = ControlPlacement.placeTank(eye, fwd(20f))!!
+        for (pitch in listOf(-30f, 30f)) {
+            val p = ControlPlacement.placeTank(eye, fwd(20f, pitch))!!
+            assertEquals("yaw", level.yaw, p.yaw, 1e-4f)
+            assertEquals("height", level.pos.y, p.pos.y, 1e-4f)
+            assertEquals("distance", ControlPlacement.TANK_DIST, kotlin.math.hypot(p.pos.x - eye.x, p.pos.z - eye.z), 1e-3f)
+        }
+        // straight down / up: no horizontal heading -> no placement (keep the last one)
+        assertTrue(ControlPlacement.placeTank(eye, V3(0f, -1f, 0f)) == null)
+    }
+
+    @Test fun fourDirectionsTheFrontFacesTheUser() {
+        for (yaw in listOf(0f, 90f, 180f, 270f)) {
+            val eye = V3(1f, 1.6f, 2f)
+            val root = ControlPlacement.placeTank(eye, fwd(yaw))!!
+            // the tank's +Z (front glass, plaque) points back at the eye within 10 deg (profile D10 四方位)
+            val front = root.toStage(V3(0f, 0f, 1f)) - root.toStage(V3.ZERO)
+            val toEye = V3(eye.x - root.pos.x, 0f, eye.z - root.pos.z).norm()
+            val cosA = (front.x * toEye.x + front.z * toEye.z) / front.length
+            assertTrue("yaw $yaw cos $cosA", cosA > cos(Math.toRadians(10.0)).toFloat())
+        }
+    }
+
+    @Test fun jarIsWithinReach() {
+        // D53 补 direct pick without walking (B17): the jar on its pedestal <= 0.70 m from the left shoulder
+        val eye = V3(0f, 1.6f, 0f)
+        val root = ControlPlacement.placeTank(eye, fwd(0f))!!
+        val shoulder = eye + V3(-0.18f, -0.25f, 0f)
+        val d = (root.toStage(Geo.JAR_HOME) - shoulder).length
+        assertTrue("jar $d m from the shoulder", d <= 0.70f)
+        // and not in the face (D14: >= 0.4 m from the head)
+        assertTrue((root.toStage(Geo.JAR_HOME) - eye).length >= 0.4f)
+    }
+
+    @Test fun jarPostAndBoardAreInTheDefaultViewAtColdStart() {
+        // M9 / D44 default view: the tank centre, the jar on its pedestal, the handle and the 「面板」 board are on screen
+        // without turning the head (FOV +-37 / +-39 deg), standing and seated
+        for (eyeY in listOf(1.6f, 1.2f)) {
+            val eye = V3(0f, eyeY, 0f)
+            val root = ControlPlacement.placeTank(eye, fwd(0f))!!
+            for ((n, p) in listOf("jar" to Geo.JAR_HOME, "handle" to V3(Geo.POST_X, Tide.M.handleY, Geo.HANDLE_Z), "board" to Geo.SIGN_C, "tank" to Geo.TANK.centre)) {
+                val (az, el) = ControlPlacement.azEl(eye, root.yaw, root.toStage(p))
+                assertTrue("$n az $az el $el", abs(az) <= ControlPlacement.HALF_FOV_H_DEG && abs(el) <= ControlPlacement.HALF_FOV_V_DEG)
             }
         }
     }
 
-    @Test fun tabBarAndSystemBarAlsoInView() {
-        for (c in ControlPlacement.corners(ControlPlacement.Side.BOTTOM, withChrome = true)) {
-            val (_, pitch) = ControlPlacement.angles(c)
-            assertTrue("chrome corner pitch=$pitch", kotlin.math.abs(pitch) <= ControlPlacement.HALF_FOV_V_DEG)
+    @Test fun aCarriedJarAndItsTipStayUnderTheWindow() {
+        // Full Space system windows draw over Stage content: the jar on its carry plane (and the tip beside it) must stay
+        // below the window's bottom bar or the window hides them (emulator v0.1.3 first try: tip cut by the window)
+        val eye = V3(0f, 1.6f, 0f)
+        val root = ControlPlacement.placeTank(eye, fwd(0f))!!
+        for (x in listOf(Geo.CARRY_X0, 0f, Geo.CARRY_X1)) for (z in listOf(-Geo.CARRY_Z, 0f, Geo.CARRY_Z)) {
+            val top = V3(x + 0.20f, Geo.CARRY_Y + Geo.JAR_HALF_H + 0.02f, z)   // jar top / tip card top edge, right of the jar
+            val (az, el) = ControlPlacement.azEl(eye, root.yaw, root.toStage(top))
+            assertTrue("($x, $z) az $az el $el vs ${ControlPlacement.windowBottomDeg()}", abs(az) > ControlPlacement.windowHalfAzDeg() || el < ControlPlacement.windowBottomDeg() - 1f)
         }
     }
 
-    @Test fun windowAndPillAreBelowTheTankNotOverIt() {
-        val pillTop = ControlPlacement.corners(ControlPlacement.Side.BOTTOM, withChrome = true).maxOf { ControlPlacement.angles(it).second }
-        val tankBottom = ControlPlacement.angles(ControlPlacement.tankBaseFrontBottom()).second
-        assertTrue("pill top $pillTop must be below the tank base $tankBottom", pillTop < tankBottom)
+    @Test fun windowPanelStaysAboveFortyDegreesDown() {
+        // D14: nothing on the panel more than 40 deg under the eye line (window straight ahead at eye height)
+        assertTrue(abs(ControlPlacement.windowBottomDeg()) <= 40f)
     }
 
-    @Test fun windowIsCentredUnderTheTank() {
-        val xs = ControlPlacement.corners(ControlPlacement.Side.BOTTOM).map { it.x }
-        assertEquals(0f, (xs.min() + xs.max()) / 2, 0.001f)
-        assertTrue(xs.max() < ControlPlacement.VOLUME_W / 2)
-    }
-
-    @Test fun theOldRightPlacementLeavesTheViewAndBottomIsTheOnlySideThatFits() {
-        val right = ControlPlacement.corners(ControlPlacement.Side.RIGHT, hDp = 600f)
-        assertFalse("v0.1.1 right placement is cut (QA #2 q2-1)", right.all { ControlPlacement.inDefaultView(it) })
-        val left = ControlPlacement.corners(ControlPlacement.Side.LEFT, hDp = 600f)
-        assertFalse(left.all { ControlPlacement.inDefaultView(it) })
-        // even a 330 dp narrow window beside the volume would not fit with the margin
-        assertFalse(ControlPlacement.corners(ControlPlacement.Side.RIGHT, wDp = 400f, hDp = 600f).all { ControlPlacement.inDefaultView(it) })
+    @Test fun recallSamplerWaitsForAStillHead() {
+        // D29: [叫回面前] is pressed while looking at the button; the pose is taken once the head is still in front
+        val r = RecallSampler()
+        r.start(0)
+        var t = 0L; var yaw = -35f
+        var taken = false
+        while (t < 3000 && !taken) {
+            yaw = if (t < 600) -35f + t / 600f * 35f else 0f
+            taken = r.step(t, yaw, 0f)
+            t += 16
+        }
+        assertTrue(taken)
+        assertEquals(0f, yaw, 2f)
+        assertNotNull(ControlPlacement.placeTank(V3(0f, 1.6f, 0f), fwd(yaw)))
     }
 }

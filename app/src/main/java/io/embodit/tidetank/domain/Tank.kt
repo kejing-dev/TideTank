@@ -214,7 +214,7 @@ class Tank(
         discovered.clear(); queue.clear(); current = null; tags.clear(); hintCount.clear()
         highTideFlakeCount = 0; allFoundShown = false
         tide = Tide.M; level = Tide.M.level; handleY = Tide.M.handleY; grille = 1f; tidePhase = TidePhase.IDLE
-        food = Food.FLAKES; jarPhase = JarPhase.HOME; jar = Geo.JAR_HOME; jarTilt = 0f; pinchesLeft = PINCHES
+        food = Food.FLAKES; jarPhase = JarPhase.HOME; jar = Geo.JAR_HOME; jarTilt = 0f; pinchesLeft = PINCHES; holder = null; jarRoll = 0f; tipShown = false
         particles.forEach { it.alive = false }
         fish.forEach { it.bites.clear(); it.fullUntil = -1f; it.phase = 0 }
         spawnAll()
@@ -234,33 +234,75 @@ class Tank(
 
     fun nextFood(why: String) = setFood(synchronized(lock) { food.next() }, why)
 
-    // ---------------------------------------------------------------- the jar (T1)
-    /** Pinch / trigger held on the jar: it rises straight up, then follows. */
-    fun jarGrab(): Boolean = synchronized(lock) {
-        if (jarPhase == JarPhase.CARRIED || jarPhase == JarPhase.LIFTING) return@synchronized true
-        jarPhase = JarPhase.LIFTING; jarT = 0f; jarFrom = jar
-        jarTarget = V3(Geo.JAR_HOME.x, Geo.CARRY_Y, Geo.JAR_HOME.z)
-        pinchesLeft = PINCHES; pourClock = POUR_EVERY * 0.6f
+    // ---------------------------------------------------------------- the jar (T1, profile D53 补: a toggle)
+    /** Who holds the jar (null = on its pedestal or on its way back) and how it was picked. */
+    var holder: Holder? = null; private set
+    var holdMode = HoldMode.RAY; private set
+    /** Roll of the holding hand / controller since the pick, degrees (signed: the side the mouth tips to). */
+    var jarRoll = 0f; private set
+    /** The 3D tip beside the jar: shown at a pick until the first put-back (then it stays away this session). */
+    var tipShown = false; private set
+    var tipLearned = false; private set
+    /** Pinches poured since the last pick (unit tests read the amount). */
+    var pouredThisHold = 0; private set
+
+    /**
+     * Grip / trigger / pinch on the jar: picked up. [DIRECT] = touched, it follows the hand in 6DoF from where it is;
+     * [RAY] = from afar, it rises to the carry plane and the hand's translation moves it over the water. Letting go of
+     * the button does nothing; [jarPutBack] (the next press) takes it home.
+     */
+    fun jarPick(by: Holder, mode: HoldMode, why: String = "input"): Boolean = synchronized(lock) {
+        if (holder != null && (jarPhase == JarPhase.CARRIED || jarPhase == JarPhase.LIFTING)) return@synchronized false
+        holder = by; holdMode = mode; jarRoll = 0f; pouredThisHold = 0
+        jarFrom = jar; jarT = 0f
+        if (mode == HoldMode.DIRECT) { jarPhase = JarPhase.CARRIED; jarTarget = jar }
+        else { jarPhase = JarPhase.LIFTING; jarTarget = V3(jar.x, Geo.CARRY_Y, jar.z) }
+        pinchesLeft = PINCHES; pourClock = 0f
+        if (!tipLearned) tipShown = true
         say = Say.Carry
         onSfx(Sfx.PICK, jar)
-        log("JAR grab")
+        log("JAR pick by=$by mode=$mode why=$why tip=$tipShown")
         if (firstRun) { firstRun = false; onFirstCarry?.invoke() }
         changed()
         true
     }
 
-    /** Where the hand wants the jar (carry plane, clamped to the travel box). */
+    /** Kept for the debug broadcast: a ray-mode pick by the system pointer. */
+    fun jarGrab(): Boolean = jarPick(Holder.POINTER, HoldMode.RAY, "grab") || holder != null
+
+    /** Ray mode: where the hand wants the jar on the carry plane (clamped to the travel box over the tank). */
     fun jarMove(x: Float, z: Float) = synchronized(lock) {
         if (jarPhase != JarPhase.CARRIED && jarPhase != JarPhase.LIFTING) return@synchronized
         val (cx, cz) = Geo.clampCarry(x, z)
         jarTarget = V3(cx, Geo.CARRY_Y, cz)
     }
 
-    fun jarRelease() = synchronized(lock) {
+    /** Direct mode: the hand's point (tank units), clamped so the jar never goes into the water or through the glass. */
+    fun jarFollow(p: V3) = synchronized(lock) {
+        if (jarPhase != JarPhase.CARRIED || holdMode != HoldMode.DIRECT) return@synchronized
+        jarTarget = Geo.clampDirect(p)
+    }
+
+    /** The roll of the holding hand / controller since the pick (JarHold.rollSinceDeg). */
+    fun jarSetRoll(deg: Float) = synchronized(lock) { if (holder != null) jarRoll = deg.coerceIn(-180f, 180f) }
+
+    /** The second press: the jar goes back to its pedestal; the first put-back retires the 3D tip. */
+    fun jarPutBack(why: String = "input") = synchronized(lock) {
         if (jarPhase == JarPhase.HOME || jarPhase == JarPhase.RETURNING) return@synchronized
         jarPhase = JarPhase.RETURNING; jarT = 0f; jarFrom = jar
-        log("JAR release at (%.3f, %.3f)".format(jar.x, jar.z))
+        log("JAR put back by=$holder why=$why at (%.3f, %.3f, %.3f) poured=$pouredThisHold".format(jar.x, jar.y, jar.z))
+        holder = null; jarRoll = 0f
+        if (tipShown) { tipShown = false; tipLearned = true }
         changed()
+    }
+
+    fun jarRelease() = jarPutBack("release")
+
+    /** Mouth of the tipped jar (tank units): the jar centre moved toward the side it tips to. */
+    fun jarMouth(): V3 {
+        val t = Math.toRadians(jarTilt.toDouble()).toFloat()
+        val side = if (jarRoll < 0f) -1f else 1f
+        return V3(jar.x + side * Geo.JAR_HALF_H * sin(t), jar.y + Geo.JAR_HALF_H * cos(t), jar.z)
     }
 
     private fun jarFrame(dt: Float) {
@@ -273,28 +315,32 @@ class Tank(
                 if (k >= 1f) jarPhase = JarPhase.CARRIED
             }
             JarPhase.CARRIED -> {
-                // follow the hand, at most 1.2 m/s (no teleport through the glass: the carry plane is above the rim)
+                // follow the hand (direct: 6DoF point, ray: carry plane); a speed cap keeps a tracking glitch from teleporting it
                 val d = jarTarget - jar
-                val step = 1.2f * dt
+                val step = (if (holdMode == HoldMode.DIRECT) 4f else 2.5f) * dt
                 jar = if (d.length <= step) jarTarget else jar + d.norm() * step
-                val over = Geo.overWater(jar.x, jar.z)
-                jarTilt = approach(jarTilt, if (over && pinchesLeft > 0) Geo.JAR_TILT_DEG else 0f, 500f * dt)
-                if (over && jarTilt > 90f && pinchesLeft > 0) {
-                    pourClock += dt
-                    if (pourClock >= POUR_EVERY) { pourClock = 0f; pinch(jar.x, jar.z, "pour") }
+                // the jar tips with the hand's roll (no auto-tip any more): pour past 60 deg, faster the more it turns
+                jarTilt = approach(jarTilt, abs(jarRoll).coerceAtMost(Geo.JAR_TILT_DEG), 400f * dt)
+                val mouth = jarMouth()
+                val over = Geo.overWater(mouth.x, mouth.z) && mouth.y > level
+                val rate = JarHold.pourRate(jarTilt)
+                if (over && rate > 0f && pinchesLeft > 0) {
+                    pourClock += dt * rate
+                    if (pourClock >= POUR_EVERY) { pourClock = 0f; pouredThisHold++; pinch(mouth.x, mouth.z, "pour", dropY = mouth.y - 0.01f) }
                 } else pourClock = min(pourClock, POUR_EVERY * 0.6f)
-                if (pinchesLeft == 0 && jarShake <= 0f && over) { jarShake = 0.4f; pinchesLeft = -1 }
+                if (pinchesLeft == 0 && jarShake <= 0f && over && rate > 0f) { jarShake = 0.4f; pinchesLeft = -1 }
             }
             JarPhase.RETURNING -> {
                 jarT += dt
                 jarTilt = approach(jarTilt, 0f, 500f * dt)
                 val half = RETURN_S / 2
+                val top = max(jarFrom.y, Geo.CARRY_Y)
                 jar = if (jarT < half) {
                     val k = ease((jarT / half).coerceIn(0f, 1f))
-                    V3(lerp(jarFrom.x, Geo.JAR_HOME.x, k), jarFrom.y, lerp(jarFrom.z, Geo.JAR_HOME.z, k))
+                    V3(lerp(jarFrom.x, Geo.JAR_HOME.x, k), lerp(jarFrom.y, top, k), lerp(jarFrom.z, Geo.JAR_HOME.z, k))
                 } else {
                     val k = ease(((jarT - half) / half).coerceIn(0f, 1f))
-                    V3(Geo.JAR_HOME.x, lerp(Geo.CARRY_Y, Geo.JAR_HOME.y, k), Geo.JAR_HOME.z)
+                    V3(Geo.JAR_HOME.x, lerp(top, Geo.JAR_HOME.y, k), Geo.JAR_HOME.z)
                 }
                 if (jarT >= RETURN_S) { jarPhase = JarPhase.HOME; jar = Geo.JAR_HOME; pinchesLeft = PINCHES; changed() }
             }

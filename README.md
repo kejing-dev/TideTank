@@ -6,7 +6,7 @@
 
 ## 中文
 
-桌上一只海水缸，放在 PICO OS 6 Shared Space 的系统立体窗口（体积）里。拿起饲料罐移到水面上，饲料一路撒下去，鱼群追着抢；也可以直接点沙底撒一小撮。拖黄铜潮位手柄（落 / 平 / 涨三档吸附）或点刻度牌换潮位：落潮礁石露出水面，涨满潮外海的闸门打开。换着饲料和潮位，把缸里藏着的 6 种海洋生物一个个引出来，图鉴记下见过的。
+桌上一只海水缸，v0.1.3 起在 PICO OS 6 的 Full Space（混合现实 Stage）里摆在你正前方、控制窗下面。碰到饲料罐按 grip 或扳机拿起来（远处用手柄射线或眼手指着按一下也行），松手它还跟着你的手；移到水面上翻手腕就倒饲料，再按一次放回罐墩，鱼群追着抢；也可以直接点沙底撒一小撮。拖黄铜潮位手柄（落 / 平 / 涨三档吸附）或点刻度牌换潮位：落潮礁石露出水面，涨满潮外海的闸门打开。换着饲料和潮位，把缸里藏着的 6 种海洋生物一个个引出来，图鉴记下见过的。
 
 - 体积 1.19 × 0.78 × 0.64 m（缸 0.84 m 宽）+ 缸正下方的控制窗（600 × 440 dp，原生 TabBar：水缸 / 图鉴 / 设置）
 - 三种饲料（浮片 / 沉粒 / 丰年虾）、三档潮位；青魔、小丑鱼、寄居蟹、海马、蓝吊、海月水母各有出场条件
@@ -38,7 +38,9 @@ pico-cli app launch io.embodit.tidetank
 
 ## English
 
-A reef tank on your desk, in a PICO OS 6 Shared Space volume. Lift the food jar over the water and food trails down while
+A reef tank in front of you, in PICO OS 6 Full Space (a Mixed Stage, since v0.1.3). Touch the food jar and press grip or
+trigger to pick it up (or point the controller ray / eye-hand at it and press once); it stays with your hand when you let
+go. Turn your wrist over the water to pour, press again to put it back. Food trails down while
 the school chases it, or tap the sand for a pinch. Drag the brass tide handle (snaps to low / mid / high) or tap a gauge
 plate: low tide bares the rocks, high tide opens the sea gate. Mix food and tide to coax out six hidden creatures and fill
 the guide.

@@ -62,7 +62,9 @@ object Geo {
      * 60 cm tank); physical metres = tank units x [SCALE]. The jar pedestal and the tide post moved 0.5 cm inward so the
      * volume could shrink to 0.85 units around them.
      */
-    const val SCALE = 1.4f
+    // v0.1.3 (Full Space, 门 C 改): the tank sits 0.62 m from the eye on the user's own floor plan, so it is drawn at the
+    // design's real size again (60 cm); 1.4 x only made sense inside a Shared Space volume parked 1.75 m away.
+    const val SCALE = 1.0f
     // volume 0.85 x 0.56 x 0.46 tank units (physical 1.19 x 0.784 x 0.644 m)
     const val VOL_W = 0.85f; const val VOL_H = 0.56f; const val VOL_D = 0.46f
     val VOLUME = Box(V3(-VOL_W / 2, -VOL_H / 2, -VOL_D / 2), V3(VOL_W / 2, VOL_H / 2, VOL_D / 2))
@@ -103,7 +105,7 @@ object Geo {
     val PEDESTAL = Box(V3(-0.415f, -0.28f, 0.07f), V3(-0.335f, -0.22f, 0.15f))
     val JAR_HOME = V3(-0.375f, -0.185f, 0.11f)
     const val JAR_BOTTOM_OFF = -0.035f   // jar model origin (bottom centre) below the jar centre
-    const val CARRY_Y = 0.19f
+    const val CARRY_Y = 0.17f
     const val CARRY_X0 = -0.375f; const val CARRY_X1 = 0.27f; const val CARRY_Z = 0.12f
     const val POUR_X = 0.25f; const val POUR_Z = 0.12f
     /** Jar collider 6.5 x 9 x 6.5 cm (design R1-4), centred on the jar centre. */
@@ -158,6 +160,15 @@ object Geo {
 
     fun clampCarry(x: Float, z: Float): Pair<Float, Float> = x.coerceIn(CARRY_X0, CARRY_X1) to z.coerceIn(-CARRY_Z, CARRY_Z)
     fun overWater(x: Float, z: Float) = abs(x) <= POUR_X && abs(z) <= POUR_Z
+
+    /** Direct hold (D53 补): the jar follows the hand anywhere near the tank, but never into the water or through the glass. */
+    const val DIRECT_X = 0.50f; const val DIRECT_Z0 = -0.25f; const val DIRECT_Z1 = 0.40f; const val DIRECT_Y1 = 0.50f
+    fun clampDirect(p: V3): V3 {
+        val x = p.x.coerceIn(-DIRECT_X, DIRECT_X); val z = p.z.coerceIn(DIRECT_Z0, DIRECT_Z1)
+        var y = p.y.coerceIn(JAR_HOME.y, DIRECT_Y1)
+        if (abs(x) < TANK_X + JAR_HALF_W && abs(z) < TANK_Z + JAR_HALF_W) y = max(y, TANK_TOP + JAR_HALF_H + 0.01f)
+        return V3(x, y, z)
+    }
 }
 
 enum class Tide(val level: Float, val handleY: Float) {

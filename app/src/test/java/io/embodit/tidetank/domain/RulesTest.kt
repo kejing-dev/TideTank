@@ -202,7 +202,7 @@ class RulesTest {
     @Test fun nameTagDodgesTheCarriedJar() {
         val t = tank()
         assertEquals(0.1f, t.tagX(0.1f, 0.05f)!!, 1e-6f)
-        t.jarGrab(); repeat(20) { t.tick(1f / 30) }; t.jarMove(0.1f, 0f); repeat(60) { t.tick(1f / 30) }
+        t.jarGrab(); repeat(20) { t.tick(1f / 30) }; t.jarMove(0.1f, 0f); t.jarSetRoll(100f); repeat(60) { t.tick(1f / 30) }
         val x = t.tagX(0.1f, 0.05f)!!
         val jw = if (t.jarTilt > 45f) Geo.JAR_TIPPED_HALF_W else Geo.JAR_HALF_W
         assertTrue("gap >= 2 cm", x - 0.05f >= t.jar.x + jw + 0.02f - 1e-4f || x + 0.05f <= t.jar.x - jw - 0.02f + 1e-4f)
@@ -213,8 +213,8 @@ class RulesTest {
         var pinches = 0
         val t = Tank(seed = 3, log = { if (it.startsWith("PINCH") && "why=pour" in it) pinches++ }); t.restore(Saved())
         t.jarGrab(); repeat(15) { t.tick(1f / 30) }
-        t.jarMove(-0.36f, 0.1f); repeat(90) { t.tick(1f / 30) }
-        assertEquals("beside the tank: upright, nothing", 0, pinches)
+        t.jarMove(-0.36f, 0.1f); t.jarSetRoll(100f); repeat(90) { t.tick(1f / 30) }
+        assertEquals("beside the tank: tipped, nothing", 0, pinches)
         t.jarMove(0.1f, 0f); repeat(30 * 6) { t.tick(1f / 30) }
         assertTrue("12 pinches max ($pinches)", pinches <= Tank.PINCHES)
         assertTrue(pinches >= 10)
@@ -222,7 +222,7 @@ class RulesTest {
         assertEquals(JarPhase.HOME, t.jarPhase); assertEquals(Tank.PINCHES, t.pinchesLeft)
     }
 
-    @Test fun tappingTheJarCyclesTheFood() {
+    @Test fun thePanelCyclesTheFood() {
         val t = tank()
         t.nextFood("t"); assertEquals(Food.PELLETS, t.food)
         t.nextFood("t"); assertEquals(Food.SHRIMP, t.food)

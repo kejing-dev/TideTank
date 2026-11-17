@@ -36,8 +36,8 @@ object Creatures {
  * The window shows [panel], the plaque [plaque] (short: ≤ 18 CJK chars / 40 Latin chars).
  */
 sealed class Say(val panel: Tx, val plaque: Tx) {
-    object Start : Say(Tx("拿起饲料罐，在水面上划一下。", "Grab a food jar and sweep it over the water."), Tx("拿起饲料罐，在水面上划一下。", "Grab the jar and sweep it over the water."))
-    object Carry : Say(Tx("在水面上方划，饲料会一路撒下去。", "Sweep over the water. Food drops as you go."), Tx("在水面上方划，饲料一路往下撒。", "Sweep over the water. Food drops as you go."))
+    object Start : Say(Tx("碰到饲料罐，按 grip 或扳机拿起来。", "Touch the jar and press grip or trigger to pick it up."), Tx("按 grip / 扳机拿起饲料罐", "Grip / trigger: pick up the jar"))
+    object Carry : Say(Tx("移到水面上方，翻手倒食物。再按一次就放回。", "Over the water, turn your hand to pour. Press again to put it back."), Tx("翻手倒食物，再按一次放回", "Turn to pour · press again: back"))
     object AfterFirst : Say(Tx("试试别的饲料，或者拨一下潮水。", "Try another food, or move the tide."), Tx("试试别的饲料，或者拨一下潮水。", "Try another food, or move the tide."))
     class SwitchFood(f: Food) : Say(SWITCH[f.ordinal], SWITCH[f.ordinal])
     class Feeding(f: Food) : Say(FEED[f.ordinal], FEED[f.ordinal])
@@ -53,6 +53,11 @@ sealed class Say(val panel: Tx, val plaque: Tx) {
     )
 
     companion object {
+        /** The 3D tip beside a picked-up jar (D53 补): shown until the first put-back. Line 1 + line 2. */
+        val TIP = Tx("翻手倒食物", "Turn your hand to pour")
+        val TIP_2 = Tx("再按 grip / 扳机放回", "Press grip / trigger again: back")
+        /** Over the tank while the control window waits for a level head (LevelGate, D9). */
+        val LEVEL = Tx("平视前方，控制窗就会打开", "Look straight ahead to open the panel")
         val SWITCH = listOf(Tx("换成浮片了，漂在水面上。", "Flakes now. They float."), Tx("换成沉粒了，会沉到底。", "Pellets now. They sink."),
             Tx("换成丰年虾了，活的，悬在中间。", "Brine shrimp now. Live, they hang mid-water."))
         val FEED = listOf(Tx("青魔冲上来了！", "Here come the chromis!"), Tx("沉粒落到底了，这儿没人要。", "Pellets hit the bottom. No takers here."),

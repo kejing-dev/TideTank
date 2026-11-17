@@ -58,6 +58,26 @@ internal object TextTex {
         return bmp
     }
 
+    /** The 3D tip beside a picked-up jar (D53 补) / the level hint: dark rounded card, two light lines (contrast on any water). */
+    fun tip(line1: String, line2: String, wM: Float, hM: Float): Bitmap {
+        val w = (wM * PX_PER_M).toInt(); val h = (hM * PX_PER_M).toInt()
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val r = h * 0.22f
+        c.drawRoundRect(RectF(2f, 2f, w - 2f, h - 2f), r, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xE6102A33.toInt() })
+        c.drawRoundRect(RectF(2f, 2f, w - 2f, h - 2f), r, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE7C77A.toInt(); style = Paint.Style.STROKE; strokeWidth = h * 0.03f })
+        val maxW = w * 0.90f
+        fun fit(t: String, size: Float, bold: Boolean, color: Int) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = if (bold) BOLD else Typeface.DEFAULT; textSize = size; textAlign = Paint.Align.CENTER; this.color = color
+            val mw = measureText(t); if (mw > maxW) textSize = size * maxW / mw
+        }
+        val p1 = fit(line1, h * 0.36f, true, 0xFFFFFFFF.toInt())
+        val p2 = fit(line2, h * 0.24f, false, 0xFFF3E3B8.toInt())
+        c.drawText(line1, w / 2f, h * 0.47f, p1)
+        c.drawText(line2, w / 2f, h * 0.82f, p2)
+        return bmp
+    }
+
     /** The F-up test pattern (D10): an asymmetric glyph pair, white on red, to check the words are not mirrored. */
     fun fTest(wM: Float, hM: Float): Bitmap {
         val w = (wM * PX_PER_M).toInt(); val h = (hM * PX_PER_M).toInt()

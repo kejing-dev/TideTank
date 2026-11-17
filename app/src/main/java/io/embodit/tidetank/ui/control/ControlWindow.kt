@@ -67,7 +67,7 @@ import java.util.Locale
 import kotlin.system.exitProcess
 
 /**
- * The control window (Planar 600 x 440 dp fixed (v0.1.2), below the volume via ControlPlacement (v0.1.2); design panels.control): three pages switched
+ * The control window (Planar 600 x 440 dp fixed; v0.1.3 Full Space: opened from the Stage straight ahead of a level head, the tank sits under it; design panels.control): three pages switched
  * only by the native SpatialUI TabBar (D8): 水缸 / 图鉴 / 设置. The how-to card (S01), the all-found card (S09), the guide
  * detail (S08b) and the confirm rows (S11) replace content in place; no page scrolls; every page is a centred column so
  * the blank stays <= 25 % (D44). Buttons 64 dp with words (B19 / B31), rows >= 48 dp, gaps >= 16 dp.
@@ -81,7 +81,6 @@ fun ControlWindow() {
     val owner = LocalLifecycleOwner.current
     val nav = LocalSpatialNavigator.current
     DisposableEffect(owner, nav) {
-        graph.window.attachPanel(nav)
         val obs = LifecycleEventObserver { _, e -> graph.window.onPanelLifecycle(e.name) }
         owner.lifecycle.addObserver(obs)
         onDispose { owner.lifecycle.removeObserver(obs) }
@@ -176,9 +175,7 @@ private fun Loading() {
     PageColumn(14, "S00") {
         Image(painterResource(R.drawable.howto_scene), contentDescription = null, contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxWidth().height(116.dp).clip(RoundedCornerShape(20.dp)))
-        HowRow(R.drawable.ic_touch, stringResource(R.string.how_to_feed), stringResource(R.string.how_to_feed_ways), "s00/feed")
-        HowRow(R.drawable.ic_swap_vert, stringResource(R.string.how_to_tide), stringResource(R.string.how_to_tide_ways), "s00/tide")
-        HowRow(R.drawable.ic_menu_book, stringResource(R.string.how_to_find), stringResource(R.string.how_to_find_ways), "s00/find")
+        HowSteps("s00", jarOnly = true)
         Row(Modifier.fillMaxWidth().height(64.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             CircularProgressIndicator()
             Spacer(Modifier.width(16.dp))
@@ -238,17 +235,27 @@ private fun MuteButton(settings: Settings, graph: Graph, modifier: Modifier) {
         onClick = { graph.settings.update { it.copy(sound = !it.sound) }; Log.i(TAG, "MUTE ${settings.sound}") }, modifier = modifier)
 }
 
-/** S01 / [怎么玩]: picture + three lines (each: what to do, how with a hand / a controller) + [知道了] (B19 how_to_*). */
+/**
+ * S01 / [怎么玩] (B19 how_to_*; v0.1.3 门 C 改, D53 补): the jar's three steps (pick up / tip to pour / press again to put it
+ * back), then the tide and the finding line; each row = what to do + how with a hand / a controller. [知道了] below.
+ */
 @Composable
 private fun HowToCard(graph: Graph) {
-    PageColumn(14) {
-        Image(painterResource(R.drawable.howto_scene), contentDescription = null, contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxWidth().height(116.dp).clip(RoundedCornerShape(20.dp)))
-        HowRow(R.drawable.ic_touch, stringResource(R.string.how_to_feed), stringResource(R.string.how_to_feed_ways), "howto/feed")
-        HowRow(R.drawable.ic_swap_vert, stringResource(R.string.how_to_tide), stringResource(R.string.how_to_tide_ways), "howto/tide")
-        HowRow(R.drawable.ic_menu_book, stringResource(R.string.how_to_find), stringResource(R.string.how_to_find_ways), "howto/find")
+    PageColumn(12) {
+        HowSteps("howto")
         PrimaryButton(stringResource(R.string.btn_got_it), "howto/ok", onClick = { Ui.howTo = false; graph.finishFirstRun() }, icon = R.drawable.ic_check, modifier = Modifier.fillMaxWidth())
     }
+}
+
+/** The how-to rows: the jar's three steps (D53 补), then (unless [jarOnly]) the tide and the finding line. */
+@Composable
+private fun HowSteps(tag: String, jarOnly: Boolean = false) {
+    HowRow(R.drawable.ic_pan_tool, stringResource(R.string.how_to_pick), stringResource(R.string.how_to_pick_ways), "$tag/pick")
+    HowRow(R.drawable.ic_rotate_right, stringResource(R.string.how_to_pour), stringResource(R.string.how_to_pour_ways), "$tag/pour")
+    HowRow(R.drawable.ic_undo, stringResource(R.string.how_to_back), stringResource(R.string.how_to_back_ways), "$tag/back")
+    if (jarOnly) return
+    HowRow(R.drawable.ic_swap_vert, stringResource(R.string.how_to_tide), stringResource(R.string.how_to_tide_ways), "$tag/tide")
+    HowRow(R.drawable.ic_menu_book, stringResource(R.string.how_to_find), stringResource(R.string.how_to_find_ways), "$tag/find")
 }
 
 @Composable
@@ -380,7 +387,7 @@ private fun SettingsPage(settings: Settings, graph: Graph, context: Context) {
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             SecondaryButton(stringResource(R.string.how_to_settings), "settings/how", onClick = { Ui.page = Page.TANK; Ui.howTo = true }, icon = R.drawable.ic_help, modifier = Modifier.weight(1f))
-            SecondaryButton(stringResource(R.string.btn_reopen), "settings/reopen", onClick = { graph.window.reopen() }, icon = R.drawable.ic_open_in_new, modifier = Modifier.weight(1f))
+            SecondaryButton(stringResource(R.string.btn_reopen), "settings/reopen", onClick = { graph.window.recall("settings") }, icon = R.drawable.ic_my_location, modifier = Modifier.weight(1f))
         }
         when (Ui.confirm) {
             Confirm.QUIT -> ConfirmRow(stringResource(R.string.confirm_exit), stringResource(R.string.btn_confirm_exit), R.drawable.ic_logout, "confirm/exit") { exitApp(context, graph) }

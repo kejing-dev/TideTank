@@ -24,14 +24,14 @@
     <string name="btn_got_it">Got it</string>
     <string name="btn_keep">Keep playing</string>
     <string name="btn_reset">Reset the tank</string>
-    <string name="btn_reopen">Reopen controls</string>
+    <string name="btn_reopen">Bring it back here</string>
     <string name="btn_exit">Quit app</string>
     <string name="btn_cancel">Cancel</string>
     <string name="btn_confirm_exit">Quit</string>
     <string name="btn_confirm_reset">Reset</string>
     <string name="confirm_exit">Close Tide Tank?</string>
     <string name="confirm_reset">The guide will be cleared. Sure?</string>
-    <string name="reopen_note">This window opens again under the tank.</string>
+    <string name="reopen_note">The tank and this window come back in front of you.</string>
     <string name="set_language">Language</string>
     <string name="lang_system">System</string>
     <string name="lang_zh">中文</string>
@@ -48,11 +48,15 @@
     <string name="fact_source">Common-knowledge biology, checked against FishBase / Wikipedia</string>
     <string name="not_here">Not here right now.</string>
     <string name="how_to_title">How to play</string>
-    <string name="how_to_feed">Grab the food jar and sweep it over the water.</string>
-    <string name="how_to_feed_ways">Hand: pinch the jar and move · Controller: hold the trigger on it</string>
     <string name="how_to_tide">Drag the brass handle on the right. The tide moves.</string>
     <string name="how_to_tide_ways">Hand: pinch and slide up / down · Controller: trigger and drag</string>
     <string name="how_to_find">Mix food and tide to bring out all six.</string>
-    <string name="how_to_find_ways">Tap the jar to change food · tap the tank floor to drop a pinch</string>
+    <string name="how_to_find_ways">Change food on the panel · tap the tank floor to drop a pinch</string>
     <string name="how_to_settings">How to play</string>
+    <string name="how_to_pick">Pick up the jar: touch it, press grip or trigger</string>
+    <string name="how_to_pick_ways">From afar: point the controller ray or eye-hand at it, press once</string>
+    <string name="how_to_pour">Turn your hand to pour, turn back to stop</string>
+    <string name="how_to_pour_ways">Past about 60° the food falls; the more you turn, the more falls</string>
+    <string name="how_to_back">Press grip / trigger again to put it back</string>
+    <string name="how_to_back_ways">Letting go drops nothing: the jar stays with your hand</string>
 </resources>

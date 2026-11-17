@@ -38,6 +38,7 @@ import io.embodit.tidetank.domain.Particle
 import io.embodit.tidetank.domain.Settings
 import io.embodit.tidetank.domain.Tank
 import io.embodit.tidetank.domain.Tide
+import io.embodit.tidetank.domain.V3
 import io.embodit.tidetank.platform.Graph
 import io.embodit.tidetank.platform.Startup
 import io.embodit.tidetank.platform.TAG
@@ -150,6 +151,24 @@ internal class TankScene(private val context: Context, private val graph: Graph,
     private val tagShown = HashMap<Kind, String>()
     private val tagFading = HashMap<Kind, Boolean>()
     private val gaugeMats = ArrayList<Pair<UnlitMaterial, Tide>>()
+    /** D53 补: the 3D tip beside a picked-up jar, and the level hint over the tank while the window waits (D9). */
+    private var tipEnt: Entity? = null
+    private var tipMat: UnlitMaterial? = null
+    private var tipShownText: String? = null
+    private var levelEnt: Entity? = null
+    private var levelMat: UnlitMaterial? = null
+    private var levelShownText: String? = null
+    /** The eye in tank units (StageRig, every frame): the tip turns to it. Null = face +Z. */
+    @Volatile var eyeLocal: V3? = null
+    /** WindowCtl.levelHint (StageRig). */
+    @Volatile var levelHint = false
+    /** Where the tank root sits in the Stage (StageRig): applied on the frame thread. */
+    @Volatile private var pendingPose: io.embodit.tidetank.domain.RootPose? = null
+    @Volatile var pose: io.embodit.tidetank.domain.RootPose? = null; private set
+    /** The tank is hidden until the first placement (no flash at the Stage origin / the floor). */
+    @Volatile var placed = false; private set
+    private var placeCount = 0
+    @Volatile var logNextPlace = false
     private var signMat: UnlitMaterial? = null
     private var shownZh: Boolean? = null
     @Volatile var built = false; private set
@@ -186,6 +205,7 @@ internal class TankScene(private val context: Context, private val graph: Graph,
         Log.i(TAG, "SCENE build start (process up ${t0 - android.os.Process.getStartElapsedRealtime()} ms)")
         val io = Dispatchers.IO
         root.transform().setScaleVector(Vector3(Geo.SCALE, Geo.SCALE, Geo.SCALE))
+        if (!placed) root.enabled = false
         val glbNames = listOf("rock", "anemone", "grass", "post", "jar_body", "jar_lid", "chromis", "clown", "tang", "crab", "seahorse", "jelly")
         // start every model now; nothing below waits for them
         val glbs = glbNames.associateWith { n -> scope.async { runCatching { Entity.loadSuspend("asset://models/$n.glb") }.onFailure { Log.e(TAG, "MODEL $n", it) }.getOrNull() } }
@@ -343,6 +363,11 @@ internal class TankScene(private val context: Context, private val graph: Graph,
             plaqueEnt = model("quad", plaqueMat!!, "plaque", tankRoot, 0f, Geo.PLAQUE.centre.y, 0.1705f).also { it.transform().setScaleVector(Vector3(Geo.PLAQUE_W, Geo.PLAQUE_H, 1f)) }
             val tagRoot = Entity().apply { setName("tagRoot"); root.addChild(this) }
             for (k in Kind.entries) { val m = unlitText(); tagMat[k] = m; tagEnt[k] = model("quad", m, "tag:${k.key}", tagRoot, 0f, Geo.TAG_BOTTOM + Geo.TAG_H / 2, Geo.TAG_Z).apply { enabled = false } }
+            // D53 补: the 3D tip beside the jar (shown at a pick until the first put-back) and the level hint
+            tipMat = unlitText()
+            tipEnt = model("quad", tipMat!!, "jarTip", tagRoot, 0f, 0f, 0f).apply { enabled = false; transform().setScaleVector(Vector3(TIP_W, TIP_H, 1f)) }
+            levelMat = unlitText()
+            levelEnt = model("quad", levelMat!!, "levelHint", tagRoot, 0f, Geo.TANK_TOP + 0.10f, -Geo.TANK_Z).apply { enabled = false; transform().setScaleVector(Vector3(LEVEL_W, LEVEL_H, 1f)) }
 
             buildLight()
 
@@ -456,7 +481,28 @@ internal class TankScene(private val context: Context, private val graph: Graph,
         scope.launch(Dispatchers.IO) {
             for (k in Kind.entries) texture(Creatures.of(k).name.get(zh), 't')
             texture(tankPlaque(zh), 'p')
+            texture(tipText(zh), 'i')
+            texture(levelText(zh), 'v')
         }
+    }
+
+    private fun tipText(zh: Boolean) = io.embodit.tidetank.domain.Say.TIP.get(zh) + "|" + io.embodit.tidetank.domain.Say.TIP_2.get(zh)
+    private fun levelText(zh: Boolean) = io.embodit.tidetank.domain.Say.LEVEL.get(zh) + "|" + io.embodit.tidetank.domain.Say.LEVEL.get(!zh)
+
+    /** Put the tank root at [p] (Stage metres, yaw only, D9); applied on the next frame. */
+    fun place(p: io.embodit.tidetank.domain.RootPose) { pendingPose = p }
+
+    private fun applyPose() {
+        val p = pendingPose ?: return
+        pendingPose = null
+        root.transform().setPosition(Vector3(p.pos.x, p.pos.y, p.pos.z))
+        root.transform().setQuaternion(yawQ(p.yaw))
+        root.transform().setScaleVector(Vector3(p.scale, p.scale, p.scale))
+        pose = p
+        val first = !placed
+        if (first) { placed = true; root.enabled = true; Startup.mark("tank placed") }
+        placeCount++
+        if (first || placeCount % 30 == 0 || logNextPlace) Log.i(TAG, "PLACE tank at (%.3f, %.3f, %.3f) yaw=%.1f".format(p.pos.x, p.pos.y, p.pos.z, Math.toDegrees(p.yaw.toDouble())))
     }
 
     private fun tankPlaque(zh: Boolean) = synchronized(tank.lock) { tank.say.plaque.get(zh) }
@@ -471,6 +517,8 @@ internal class TankScene(private val context: Context, private val graph: Graph,
                 kind == 't' -> Geo.tagWidth(text).let { w -> TextTex.tag(text, w, Geo.TAG_H, Geo.TAG_TEXT_H) }
                 kind == 'p' -> TextTex.plate(text, Geo.PLAQUE_W, Geo.PLAQUE_H, 0.020f)
                 kind == 'g' -> text.split("|").let { TextTex.plate(it[0], 0.034f, 0.022f, 0.012f, it.getOrNull(1)) }
+                kind == 'i' -> text.split("|").let { TextTex.tip(it[0], it.getOrElse(1) { "" }, TIP_W, TIP_H) }
+                kind == 'v' -> text.split("|").let { TextTex.tip(it[0], it.getOrElse(1) { "" }, LEVEL_W, LEVEL_H) }
                 else -> text.split("|").let { TextTex.plate(it[0], 0.074f, 0.039f, 0.018f, it.getOrNull(1)) }
             }
             val t = runCatching { TextureResource.create(bmp).keep() }.onFailure { Log.w(TAG, "TEX $text: $it") }.getOrNull()
@@ -482,7 +530,7 @@ internal class TankScene(private val context: Context, private val graph: Graph,
     }
 
     fun applySettings(s: Settings) {
-        if (built) { prewarm(); shownZh = null; plaqueShown = null; tagShown.clear() }
+        if (built) { prewarm(); shownZh = null; plaqueShown = null; tagShown.clear(); tipShownText = null; levelShownText = null }
     }
 
     // ------------------------------------------------------------------ per frame
@@ -490,6 +538,7 @@ internal class TankScene(private val context: Context, private val graph: Graph,
         if (!built) return
         frames++
         val nowMs = SystemClock.elapsedRealtime()
+        applyPose()
         arrivalsFrame(nowMs)
         if (nowMs - fpsT0 >= 5000) { fps = frames * 1000f / (nowMs - fpsT0); Log.i(TAG, "PERF fps=${"%.1f".format(fps)} state=${tank.state} particles=${tank.particles.count { it.alive }}"); frames = 0; fpsT0 = nowMs }
         if (graph.loaded) tank.tick(dt)
@@ -561,9 +610,11 @@ internal class TankScene(private val context: Context, private val graph: Graph,
                 val jp = tank.jar
                 val shake = if (tank.jarShake > 0f) 0.004f * sin(tank.jarShake * 60f) else 0f
                 j.at(jp.x + shake, jp.y, jp.z)
-                // tips toward the tank's back-left: the mouth points down and a little forward (design 110 deg)
-                jarModel?.transform()?.setQuaternion(Quat(Vector3(1f, 0f, 0f), rad(-tank.jarTilt)))
-                jarModel?.at(0f, Geo.JAR_BOTTOM_OFF * kotlin.math.cos(rad(tank.jarTilt)), -Geo.JAR_BOTTOM_OFF * sin(rad(tank.jarTilt)))
+                // D53 补: the jar tips with the hand's roll, to the side the hand turns (mouth toward that side, down past 90 deg)
+                val side = if (tank.jarRoll < 0f) -1f else 1f
+                val tl = rad(tank.jarTilt) * side
+                jarModel?.transform()?.setQuaternion(Quat(Vector3(0f, 0f, 1f), -tl))
+                jarModel?.at(Geo.JAR_BOTTOM_OFF * sin(-tl) * -1f, Geo.JAR_BOTTOM_OFF * kotlin.math.cos(tl), 0f)
                 // QA #2 small: a lifted jar casts no shadow (it fell on the see-through water / glass as a dark vertical smear);
                 // back on its pedestal the default shadow returns. Re-checked when the body / lid arrive (child count changes).
                 val lifted = tank.jarPhase != io.embodit.tidetank.domain.JarPhase.HOME
@@ -581,14 +632,35 @@ internal class TankScene(private val context: Context, private val graph: Graph,
             }
             val glow = (tank.jarGlow * 10).toInt() / 10f
             if (glow != shownGlow) { shownGlow = glow; val k = glow * 0.6f; lidMats.forEach { runCatching { it.setEmissiveColor(Color4(0.60f * k, 0.94f * k, 0.66f * k, 1f)) } } }
-            // the dashed drop column under a tipped jar
-            val pouring = tank.jarTilt > 90f && Geo.overWater(tank.jar.x, tank.jar.z)
-            val top = tank.jar.y - 0.04f; val bot = tank.level
+            // the dashed drop column under the mouth of a tipped jar (lands straight below it, D53 补)
+            val mouth = tank.jarMouth()
+            val pouring = io.embodit.tidetank.domain.JarHold.pourRate(tank.jarTilt) > 0f && Geo.overWater(mouth.x, mouth.z) && tank.holder != null
+            val top = mouth.y - 0.01f; val bot = tank.level
             for ((i, d) in dashes.withIndex()) {
                 val y = top - i * 0.024f
                 val on = pouring && y - 0.012f > bot
                 if (d.enabled != on) d.enabled = on
-                if (on) d.at(tank.jar.x, y - 0.012f, tank.jar.z)
+                if (on) d.at(mouth.x, y - 0.012f, mouth.z)
+            }
+            // the 3D tip beside the held jar, turned to the eye (yaw only)
+            tipEnt?.let { e ->
+                val on = tank.tipShown && tank.holder != null
+                if (on) {
+                    val txt = tipText(zh)
+                    if (tipShownText != txt) texture(txt, 'i')?.let { tipMat?.setBaseColorTexture(it); tipShownText = txt }
+                    val at = V3(tank.jar.x + TIP_DX, tank.jar.y + TIP_DY, tank.jar.z)
+                    e.at(at.x, at.y, at.z)
+                    val eye = eyeLocal
+                    e.transform().setQuaternion(yawQ(if (eye != null) kotlin.math.atan2(eye.x - at.x, eye.z - at.z) else 0f))
+                }
+                val vis = on && tipShownText != null
+                if (e.enabled != vis) { e.enabled = vis; Log.i(TAG, "TIP ${if (vis) "shown" else "hidden"}") }
+            }
+            levelEnt?.let { e ->
+                val on = levelHint
+                if (on) { val txt = levelText(zh); if (levelShownText != txt) texture(txt, 'v')?.let { levelMat?.setBaseColorTexture(it); levelShownText = txt } }
+                val vis = on && levelShownText != null
+                if (e.enabled != vis) e.enabled = vis
             }
             // plants sway (whole model, design: no rig)
             anemone?.transform()?.setQuaternion(Quat(Vector3(0f, 0f, 1f), rad(3f) * sin(tank.now * 0.8f)))
@@ -640,7 +712,7 @@ internal class TankScene(private val context: Context, private val graph: Graph,
         }
     }
 
-    fun refreshText() { plaqueShown = null; tagShown.clear(); shownZh = null }
+    fun refreshText() { plaqueShown = null; tagShown.clear(); shownZh = null; tipShownText = null; levelShownText = null }
 
     fun dispose() {
         synchronized(all) { all.forEach { runCatching { it.close() } }; all.clear() }
@@ -648,6 +720,9 @@ internal class TankScene(private val context: Context, private val graph: Graph,
 
     companion object {
         const val LIGHT_LUX = 1600f
+        /** The jar tip card (tank units = metres at SCALE 1): 15 x 4.6 cm, right of the jar (line 1 cap ~1.3 deg at 0.6 m, D13). */
+        const val TIP_W = 0.15f; const val TIP_H = 0.046f; const val TIP_DX = 0.12f; const val TIP_DY = -0.01f
+        const val LEVEL_W = 0.30f; const val LEVEL_H = 0.07f
         /** Fade-in of a model that just arrived (q1-3). */
         const val APPEAR_MS = 700L
         @Suppress("unused") private fun nearly(a: Float, b: Float) = abs(a - b) < 1e-4f

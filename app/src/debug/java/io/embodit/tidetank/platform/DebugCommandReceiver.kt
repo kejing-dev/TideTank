@@ -11,6 +11,7 @@ import io.embodit.tidetank.domain.Geo
 import io.embodit.tidetank.domain.Kind
 import io.embodit.tidetank.domain.Language
 import io.embodit.tidetank.domain.Tide
+import io.embodit.tidetank.domain.V3
 import io.embodit.tidetank.ui.Confirm
 import io.embodit.tidetank.ui.Page
 import io.embodit.tidetank.ui.Ui
@@ -61,32 +62,50 @@ class DebugCommandReceiver : BroadcastReceiver() {
         when (cmd) {
             "tide" -> Tide.parse(a.getOrNull(0))?.let { t.setTide(it, "debug") }
             "food" -> Food.parse(a.getOrNull(0))?.let { t.setFood(it, "debug") }
-            "tapjar" -> Active.listener?.route(Names.JAR, null)
-            // placeoff <dp>: try another control-window offset (next open / reopen uses it; tuning only)
-            "placeside" -> { io.embodit.tidetank.domain.ControlPlacement.side = io.embodit.tidetank.domain.ControlPlacement.Side.valueOf(a[0].uppercase()); io.embodit.tidetank.domain.ControlPlacement.offsetDp = f(a.getOrNull(1), 0f); g.window.reopen() }
-            "placeoff" -> { io.embodit.tidetank.domain.ControlPlacement.offsetDp = f(a.getOrNull(0), io.embodit.tidetank.domain.ControlPlacement.OFFSET_DP); g.window.reopen() }
+            "tapjar" -> Active.listener?.route(Names.JAR, null, "debug")
+            // ---- v0.1.3 jar toggle (D53 补): injected controller / hand go through the same per-frame StageRig -> JarInput path
+            // ctrl <x> <y> <z> [roll] [0|1]: right controller tip at tank point (x, y, z), pointing into the tank, grip/trigger
+            "ctrl" -> Active.rig?.injectCtrl(V3(f(a.getOrNull(0), Geo.JAR_HOME.x), f(a.getOrNull(1), Geo.JAR_HOME.y), f(a.getOrNull(2), Geo.JAR_HOME.z)), f(a.getOrNull(3), 0f), a.getOrNull(4)?.let { it == "1" })
+            // ctrlaim <x> <y> <z> [0|1]: right controller at the user's hip, its ray on tank point (x, y, z)
+            "ctrlaim" -> Active.rig?.injectAim(V3(f(a.getOrNull(0), Geo.JAR_HOME.x), f(a.getOrNull(1), Geo.JAR_HOME.y), f(a.getOrNull(2), Geo.JAR_HOME.z)), a.getOrNull(3)?.let { it == "1" })
+            // ctrlmove <dx> <dy> <dz> [steps]: move the injected controller (Stage metres), in [steps] frames-apart steps
+            "ctrlmove" -> { val n = (a.getOrNull(3)?.toIntOrNull() ?: 1).coerceAtLeast(1); val d = V3(f(a.getOrNull(0), 0f), f(a.getOrNull(1), 0f), f(a.getOrNull(2), 0f)) * (1f / n)
+                for (i in 0 until n) main.postDelayed({ Active.rig?.moveCtrl(d) }, i * 33L) }
+            "ctrlroll" -> Active.rig?.rollCtrl(f(a.getOrNull(0), 70f))
+            // press [0|1] / click: the injected right controller's grip / trigger (click = down, 120 ms, up)
+            "press" -> Active.rig?.pressCtrl(a.getOrNull(0) != "0")
+            "click" -> { Active.rig?.pressCtrl(true); main.postDelayed({ Active.rig?.pressCtrl(false) }, 120) }
+            "ctrloff" -> Active.rig?.ctrlOff()
+            // hand <x> <y> <z> [roll] [0|1]: right hand pinch point at tank point, wrist roll, pinched
+            "hand" -> Active.rig?.injectHand(V3(f(a.getOrNull(0), Geo.JAR_HOME.x), f(a.getOrNull(1), Geo.JAR_HOME.y), f(a.getOrNull(2), Geo.JAR_HOME.z)), f(a.getOrNull(3), 0f), a.getOrNull(4) == "1")
+            "handoff" -> Active.rig?.handOff()
+            // head <x> <y> <z> <yawDeg> <pitchDeg> / headoff: an injected head pose (placement / recall / level gate tests)
+            "head" -> Active.rig?.injectHead(V3(f(a.getOrNull(0), 0f), f(a.getOrNull(1), 1.6f), f(a.getOrNull(2), 0f)), f(a.getOrNull(3), 0f), f(a.getOrNull(4), 0f))
+            "headoff" -> Active.rig?.headOff()
+            "stick" -> { Active.rig?.controllers?.injectStick(f(a.getOrNull(0), 1f)); main.postDelayed({ Active.rig?.controllers?.injectStick(0f) }, (f(a.getOrNull(1), 0.5f) * 1000).toLong()) }
+            "recall" -> g.window.recall("debug")
             "tapsign" -> Active.listener?.route(Names.SIGN, null)
             // q1-1: a tap on the brass handle (next stop) / on a gauge plate (that stop), same route as a real tap
             "taphandle" -> Active.listener?.route(Names.HANDLE, null)
             "tapgauge" -> Tide.parse(a.getOrNull(0))?.let { Active.listener?.route(Names.gauge(it), null) }
             // tap <x> <z>: a tap on the tank bottom at volume metres (same route as a real tap)
             "tap" -> { val x = f(a.getOrNull(0), 0f); val z = f(a.getOrNull(1), 0f); tap(g, if (x < Geo.ROCK_TOE_X) Names.rock(1) else Names.sand(5), x, z) }
-            // carry <food> <x> <z> [hold]: grab the jar, move it over (x, z) through jarMove, keep pouring; release after 3 s unless hold
+            // carry <food> <x> <z> [hold]: the injected controller touches the jar + click (direct pick), moves over (x, z),
+            // rolls 90 deg (pours); clicks again after 3 s (put back) unless hold
             "carry" -> {
                 Food.parse(a.getOrNull(0))?.let { t.setFood(it, "debug") }
                 val x = f(a.getOrNull(1), 0.1f); val z = f(a.getOrNull(2), 0.05f)
-                t.jarGrab(); main.postDelayed({ t.jarMove(x, z) }, 350)
-                if (a.getOrNull(3) == "hold") main.postDelayed({ t.frozen = true }, 1500)
-                else main.postDelayed({ t.jarRelease() }, 3500)
+                carry(g, x, z, a.getOrNull(3) == "hold")
             }
-            // sweep <food> <x0> <x1> <z>: a real sweep of the jar along x (the pour path the hand would draw)
+            // sweep <food> <x0> <x1> <z>: the same, then a sweep along x while tipped (the pour path the hand would draw)
             "sweep" -> {
                 Food.parse(a.getOrNull(0))?.let { t.setFood(it, "debug") }
                 val x0 = f(a.getOrNull(1), -0.2f); val x1 = f(a.getOrNull(2), 0.2f); val z = f(a.getOrNull(3), 0f)
-                t.jarGrab(); for (i in 0..30) main.postDelayed({ t.jarMove(x0 + (x1 - x0) * i / 30f, z) }, 400L + i * 100)
-                main.postDelayed({ t.jarRelease() }, 3700)
+                carry(g, x0, z, true)
+                for (i in 1..30) main.postDelayed({ Active.rig?.moveCtrl(V3((x1 - x0) / 30f * Geo.SCALE, 0f, 0f)) }, 1400L + i * 100)
+                main.postDelayed({ run(g, "click", "") }, 5000)
             }
-            "release" -> t.jarRelease()
+            "release" -> { if (t.holder != null) run(g, "click", "") }
             // handle <dy...>: a drag of the brass handle through handleGrab / handleMove / handleRelease (metres of travel)
             "handle" -> { t.handleGrab(); a.forEach { t.handleMove(it.toFloatOrNull() ?: 0f) }; t.handleRelease() }
             "find" -> Kind.parse(a.getOrNull(0))?.let { recipe(g, it) }
@@ -112,7 +131,7 @@ class DebugCommandReceiver : BroadcastReceiver() {
             "openpanel" -> g.window.open("debug")
             "testf" -> SceneHolder.scene?.let { it.testF = a.getOrNull(0) != "off"; it.refreshText() }
             "dump" -> synchronized(t.lock) {
-                Log.i(TAG, "DUMP state=${t.state} tide=${t.tide} level=${t.level} food=${t.food} found=${t.discovered.keys} jar=${t.jar} tilt=${t.jarTilt} handle=${t.handleY} htf=${t.highTideFlakeCount} fps=${SceneHolder.scene?.fps} page=${Ui.page}")
+                Log.i(TAG, "DUMP state=${t.state} tide=${t.tide} level=${t.level} food=${t.food} found=${t.discovered.keys} jar=${t.jar} holder=${t.holder} mode=${t.holdMode} roll=${t.jarRoll} tilt=${t.jarTilt} tip=${t.tipShown} poured=${t.pouredThisHold} handle=${t.handleY} htf=${t.highTideFlakeCount} fps=${SceneHolder.scene?.fps} page=${Ui.page} pose=${SceneHolder.scene?.pose} panel=${g.window.panelState}")
             }
             else -> Log.w(TAG, "DEBUG unknown $cmd")
         }
@@ -123,7 +142,7 @@ class DebugCommandReceiver : BroadcastReceiver() {
         t.frozen = false
         when (s.uppercase()) {
             "S01" -> { Ui.page = Page.TANK; Ui.result = false; Ui.howTo = true }
-            "S02" -> { Ui.page = Page.TANK; Ui.howTo = false; Ui.result = false; t.jarRelease() }
+            "S02" -> { Ui.page = Page.TANK; Ui.howTo = false; Ui.result = false; if (t.holder != null) run(g, "click", "") }
             "S03" -> { Ui.howTo = false; run(g, "carry", "${t.food.key} 0.1 0.05 hold") }
             "S04" -> { Ui.howTo = false; tap(g, Names.sand(5), 0.1f, 0.0f) }
             "S05" -> { Ui.howTo = false; t.setTide(if (t.tide == Tide.M) Tide.L else Tide.M, "debug"); main.postDelayed({ t.frozen = true }, 1250) }
@@ -136,6 +155,19 @@ class DebugCommandReceiver : BroadcastReceiver() {
     }
 
     private fun run(g: Graph, cmd: String, arg: String) { run(appContext ?: return, g, cmd, arg) }
+
+    /** Direct pick by the injected right controller, carried over (x, z) on the carry plane, rolled 90 deg. */
+    private fun carry(g: Graph, x: Float, z: Float, hold: Boolean) {
+        val j = Geo.JAR_HOME
+        run(g, "ctrl", "${j.x} ${j.y} ${j.z} 0 0")
+        main.postDelayed({ run(g, "click", "") }, 150)
+        // after the pick the jar follows the tip: move the tip up over the rim and then to (x, z)
+        main.postDelayed({ Active.rig?.moveCtrl(V3(0f, (Geo.CARRY_Y - j.y) * Geo.SCALE, 0f)) }, 450)
+        main.postDelayed({ val p = Active.rig?.scene?.pose ?: return@postDelayed; Active.rig?.moveCtrl(io.embodit.tidetank.domain.RootPose.rotY(V3((x - j.x) * Geo.SCALE, 0f, (z - j.z) * Geo.SCALE), p.yaw)) }, 750)
+        main.postDelayed({ Active.rig?.rollCtrl(90f) }, 1100)
+        if (hold) main.postDelayed({ g.tank.frozen = true }, 2600)
+        else main.postDelayed({ run(g, "click", "") }, 3600)
+    }
 
 
     companion object {

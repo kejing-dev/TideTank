@@ -1,36 +1,22 @@
 package io.embodit.tidetank.domain
 
+import kotlin.math.abs
 import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * q2-1 (QA #2): where the control window opens. One placement for every open path (start, resume, settings
- * [重开控制窗], the 「面板」 board, the volume coming back): Main.kt reads [side] / [offsetDp].
+ * v0.1.3 (门 C 改, profile D53 补): the app runs in Full Space (one Mixed Stage) so the jar can follow a hand / controller.
+ * Two things are placed:
  *
- * v0.1.1 used Placement.right(volume). With the volume at 1.19 m the system solved the window to (0.848, 0, -1.248) m,
- * yawed 32.8 deg: its outer edge sat ~43 deg right of the eye line, past the ~37 deg edge of the default view. Shared
- * Space only lets an app place a window left / right / top / bottom of another window (SDK 6.1.9 Placement; the offset
- * is unsigned, a negative one overflows). Left / right cannot fit a 1.19 m volume plus any >= 330 dp window; top puts the
- * window above the eyes. So v0.1.2 opens it BELOW the volume, centred under the tank, and the window is 600 x 440 dp
- * (was 600 x 600; pages re-spaced, blank still <= 25 %) so its bottom edge stays inside the default view.
- *
- * The numbers below are the system's own solve on the emulator (logcat WorldSpaceNative ContainerTransformSolver, eye
- * at the origin) and the capture's measured field of view; [ControlPlacementTest] checks the four corners for a standing
- * (1.6 m) and a seated (1.2 m) eye. Shared Space places the volume relative to the head, so the eye-space angles are the
- * same for both; the eye height only changes the floor clearance.
+ * - the tank: [placeTank] from the head pose, yaw only (profile D9 placeUpright: pitch / roll never reach the tank), the
+ *   tank centre [TANK_DIST] m ahead on the floor plan, the rim [RIM_BELOW_EYE] m under the eye. The jar on its pedestal
+ *   (left front) is then about 0.67 m from the left shoulder: touchable without walking (D53 补 direct pick, B17).
+ * - the control window: Full Space opens a Planar window straight ahead of the head at the system distance; the app
+ *   cannot move it (pico-cli-feedback「Stage 里…系统窗口不能摆在 Stage 实体旁边」). The tank sits under it: every tank
+ *   corner is below the window's bottom edge + the system bar from the eye ([tankClearsWindow], unit-tested standing and
+ *   seated, head level / pitched).
  */
 object ControlPlacement {
-    enum class Side { RIGHT, BOTTOM, LEFT }
-
-    val SIDE = Side.BOTTOM
-    /** Gap between the volume and the window, dp (the system already leaves room for the TabBar pill). */
-    const val OFFSET_DP = 0f
-    /** What Main.kt passes (the debug build can try another side / offset with `placeside` / `placeoff`). */
-    @Volatile var side = SIDE
-    @Volatile var offsetDp = OFFSET_DP
-
     // ---- window (Main.kt / ControlWindow.kt)
     const val WINDOW_W_DP = 600f
     const val WINDOW_H_DP = 440f
@@ -38,59 +24,54 @@ object ControlPlacement {
     const val TABBAR_DP = 64f
     /** System controls (dots / x / handle) under a window's bottom edge (profile D8 §2). */
     const val SYSTEM_BAR_DP = 60f
-    /** Physical metres per dp of the control window as placed (default-view capture: 440 dp = 0.351 m at 1.45 m). */
-    const val M_PER_DP = 0.0008f
+    /** Full Space: the system opens a window 1.75 m straight ahead of the eye, 1 dp = 1 mm (clay-forge Layout, spatial-calc). */
+    const val WINDOW_DIST = 1.75f
+    const val M_PER_DP = 0.001f
 
-    // ---- the volume as the system places it (manifest 1.19 x 0.784 x 0.644 m; logcat anchorContainerPosition)
-    val VOLUME_CENTRE = V3(0f, -0.061f, -1.749f)
-    const val VOLUME_W = 1.19f
-    const val VOLUME_H = 0.784f
-    const val VOLUME_D = 0.644f
-
-    /** Solved window centre (eye space, metres) and its pitch / yaw toward the eye, per side (logcat containerPosition). */
-    data class Solve(val centre: V3, val pitchDeg: Float, val yawDeg: Float)
-    fun solve(s: Side): Solve = when (s) {
-        Side.BOTTOM -> Solve(V3(0f, -0.731f, -1.251f), -29.0f, 0f)       // v0.1.2, 600 x 440, offset 0
-        Side.RIGHT -> Solve(V3(0.848f, 0f, -1.248f), 0f, -32.8f)         // v0.1.1, 600 x 600
-        Side.LEFT -> Solve(V3(-0.848f, 0f, -1.248f), 0f, 32.8f)
-    }
-
-    // ---- default view (one eye of the emulator capture: pinhole f fitted to the solved window and volume)
+    // ---- tank (Stage metres)
+    const val TANK_DIST = 0.70f
+    const val RIM_BELOW_EYE = 0.24f
+    /** The default view (one eye of the emulator capture). */
     const val HALF_FOV_H_DEG = 37f
     const val HALF_FOV_V_DEG = 39f
-    /** Every corner stays this far inside the edge (capture-to-capture head drift, headset frustum). */
-    const val MARGIN_DEG = 1.5f
-    /** profile D14: nothing on the panel more than 40 deg below the eye line. */
-    const val MAX_DOWN_DEG = 40f
 
-    /** Window corners (+ TabBar above / system bar below when [withChrome]) in eye space, metres (x right, y up, -z ahead). */
-    fun corners(s: Side = side, wDp: Float = WINDOW_W_DP, hDp: Float = if (s == Side.BOTTOM) WINDOW_H_DP else 600f, withChrome: Boolean = false): List<V3> {
-        val sv = solve(s)
-        val hw = wDp * M_PER_DP / 2
-        val top = hDp * M_PER_DP / 2 + if (withChrome) TABBAR_DP * M_PER_DP else 0f
-        val bot = -hDp * M_PER_DP / 2 - if (withChrome) SYSTEM_BAR_DP * M_PER_DP else 0f
-        val p = Math.toRadians(sv.pitchDeg.toDouble()); val y = Math.toRadians(sv.yawDeg.toDouble())
-        return listOf(-hw to top, hw to top, -hw to bot, hw to bot).map { (lx, ly) ->
-            // local (lx, ly, 0) -> pitch about x -> yaw about y -> + centre
-            val py = ly * cos(p); val pz = ly * sin(p)
-            val wx = lx * cos(y) + pz * sin(y); val wz = -lx * sin(y) + pz * cos(y)
-            V3(sv.centre.x + wx.toFloat(), sv.centre.y + py.toFloat(), sv.centre.z + wz.toFloat())
-        }
+    /** Where the tank root goes for a head at [eye] looking along [forward]; null while the forward has no horizontal part. */
+    fun placeTank(eye: V3, forward: V3, scale: Float = Geo.SCALE): RootPose? {
+        val h = sqrt(forward.x * forward.x + forward.z * forward.z)
+        if (h < 0.05f || !eye.x.isFinite()) return null
+        val fx = forward.x / h; val fz = forward.z / h
+        val yaw = atan2(-fx, -fz)
+        val y = eye.y - RIM_BELOW_EYE - Geo.TANK_TOP * scale
+        return RootPose(V3(eye.x + fx * TANK_DIST, y, eye.z + fz * TANK_DIST), yaw, scale)
     }
 
-    /** (yaw, pitch) of an eye-space point, degrees; yaw + = right, pitch + = up. */
-    fun angles(p: V3): Pair<Float, Float> {
-        val ahead = -p.z
-        val yaw = Math.toDegrees(atan2(p.x.toDouble(), ahead.toDouble())).toFloat()
-        val pitch = Math.toDegrees(atan2(p.y.toDouble(), sqrt((p.x * p.x + ahead * ahead).toDouble()))).toFloat()
-        return yaw to pitch
+    /** Azimuth / elevation (degrees) of [p] from [eye] in a frame whose forward is the tank-facing yaw. */
+    fun azEl(eye: V3, yaw: Float, p: V3): Pair<Float, Float> {
+        val d = RootPose.rotY(p - eye, -yaw)
+        val ahead = -d.z
+        val az = Math.toDegrees(atan2(d.x.toDouble(), ahead.toDouble())).toFloat()
+        val el = Math.toDegrees(atan2(d.y.toDouble(), sqrt((d.x * d.x + ahead * ahead).toDouble()))).toFloat()
+        return az to el
     }
 
-    fun inDefaultView(p: V3): Boolean {
-        val (yaw, pitch) = angles(p)
-        return -p.z > 0f && kotlin.math.abs(yaw) <= HALF_FOV_H_DEG - MARGIN_DEG && kotlin.math.abs(pitch) <= HALF_FOV_V_DEG - MARGIN_DEG
+    /** The window's bottom edge + system bar, degrees below the eye line (window straight ahead at eye height). */
+    fun windowBottomDeg(): Float = -Math.toDegrees(atan2(((WINDOW_H_DP / 2 + SYSTEM_BAR_DP) * M_PER_DP).toDouble(), WINDOW_DIST.toDouble())).toFloat()
+    fun windowHalfAzDeg(): Float = Math.toDegrees(atan2((WINDOW_W_DP / 2 * M_PER_DP).toDouble(), WINDOW_DIST.toDouble())).toFloat()
+
+    /** Every corner of every tank box (tank units) as seen from [eye]: (az, el). */
+    fun tankCornersAzEl(eye: V3, root: RootPose, boxes: List<Box> = listOf(Geo.TANK, Geo.BASE, Geo.PEDESTAL, Geo.POST, Geo.SIGN)): List<Pair<Float, Float>> =
+        boxes.flatMap { b -> b.corners().map { azEl(eye, root.yaw, root.toStage(it)) } }
+
+    /** Nothing of the tank in front of the window: every corner inside the window's azimuth band sits under its bottom bar. */
+    fun tankClearsWindow(eye: V3, root: RootPose, marginDeg: Float = 1f): List<String> {
+        val bottom = windowBottomDeg(); val half = windowHalfAzDeg()
+        return tankCornersAzEl(eye, root).filter { (az, el) -> abs(az) <= half + marginDeg && el > bottom - marginDeg }
+            .map { (az, el) -> "corner az %.1f el %.1f above the window bottom %.1f".format(az, el, bottom) }
     }
 
-    /** Lowest point of the volume's content (front-bottom edge of the walnut base), eye space. */
-    fun tankBaseFrontBottom(): V3 = V3(0f, VOLUME_CENTRE.y - VOLUME_H / 2, VOLUME_CENTRE.z + VOLUME_D / 2)
+    /** The tank centre is in the default view (cold start: the tank shows first, M9). */
+    fun tankCentreInView(eye: V3, root: RootPose): Boolean {
+        val (az, el) = azEl(eye, root.yaw, root.toStage(Geo.TANK.centre))
+        return abs(az) <= HALF_FOV_H_DEG && abs(el) <= HALF_FOV_V_DEG
+    }
 }

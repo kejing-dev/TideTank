@@ -63,7 +63,9 @@ class LayoutTest {
             val x = Geo.CARRY_X0 + (Geo.CARRY_X1 - Geo.CARRY_X0) * i / 20; val z = -Geo.CARRY_Z + 2 * Geo.CARRY_Z * j / 8
             for (tilt in listOf(0f, Geo.JAR_TILT_DEG)) {
                 val b = jarBox(V3(x, Geo.CARRY_Y, z), tilt)
-                for (c in b.corners()) assertTrue("jar corner $c at ($x, $z) tilt $tilt", inner.contains(c, -margin))
+                // v0.1.3 Full Space: no volume walls any more (the jar tips sideways with the hand and may lean past the old
+                // volume edge); what stays: never in the glass, always above the rim
+                assertFalse("jar at ($x, $z) tilt $tilt in the glass", b.intersects(Geo.TANK))
                 assertTrue("above the rim", b.lo.y > Geo.TANK_TOP)
                 n++
             }
@@ -168,19 +170,18 @@ class LayoutTest {
         assertTrue(abs(Geo.tagWidth("Green chromis") - 0.163f) < 0.02f && Geo.tagWidth("Green chromis") <= Geo.TAG_MAX_W)
     }
 
-    // ---------------------------------------------------------------- QA #1 q1-2 (D54): the tank fills the volume
-    @Test fun theTankFillsTheVolumeAndIsBigEnoughAtTheSystemDistance() {
-        val volW = Geo.phys(Geo.VOL_W); val volH = Geo.phys(Geo.VOL_H); val volD = Geo.phys(Geo.VOL_D)
-        // manifest default size = the tank-unit volume x SCALE
+    // ---------------------------------------------------------------- v0.1.3 Full Space (D54 主体撑满 / 门 C 改)
+    @Test fun theTankIsAStageObjectBigInTheView() {
+        // the manifest opens a Mixed Stage, not a volume (Shared Space volumes get no hand / controller poses)
         val manifest = File("src/main/AndroidManifest.xml").let { if (it.exists()) it else File("app/src/main/AndroidManifest.xml") }.readText()
-        val size = Regex("windowcontainer.defaultsize\"\\s*android:value=\"([0-9.]+)x([0-9.]+)x([0-9.]+)\"").find(manifest)!!.groupValues
-        assertEquals(volW, size[1].toFloat(), 0.002f); assertEquals(volH, size[2].toFloat(), 0.002f); assertEquals(volD, size[3].toFloat(), 0.002f)
-        val tankW = Geo.phys(2 * Geo.TANK_X)
-        assertTrue("longest edge ${tankW / volW}", tankW / volW >= 0.70f)
-        assertTrue("shortest edge ${Geo.phys(2 * Geo.TANK_Z) / volD}", Geo.phys(2 * Geo.TANK_Z) / volD >= 0.50f)
-        // the system parks a volume ~1.75 m away (QA #1 logcat ContainerTransformSolver z = -1.75)
-        val deg = Math.toDegrees(2 * atan2(tankW / 2.0, 1.75)).toFloat()
-        assertTrue("tank $deg deg at 1.75 m", deg >= 25f)
+        assertTrue(manifest.contains("pico.spatial.stage.id") && manifest.contains("pico.spatial.stage.style\" android:value=\"1\""))
+        assertTrue("no volume container left", !manifest.contains("windowcontainer.style"))
+        // D54: the tank spans >= 25 deg from the eye (placed TANK_DIST ahead): it is the subject, not a toy
+        val eye = V3(0f, 1.6f, 0f)
+        val root = ControlPlacement.placeTank(eye, V3(0f, 0f, -1f))!!
+        val l = root.toStage(V3(-Geo.TANK_X, Geo.TANK_TOP, Geo.TANK_Z)); val r = root.toStage(V3(Geo.TANK_X, Geo.TANK_TOP, Geo.TANK_Z))
+        val deg = Math.toDegrees(atan2(r.x - eye.x.toDouble(), (eye.z - r.z).toDouble()) - atan2(l.x - eye.x.toDouble(), (eye.z - l.z).toDouble())).toFloat()
+        assertTrue("tank front $deg deg", deg >= 25f)
     }
 
     @Test fun everythingKeepsOnePhysicalCentimetreFromTheVolumeWalls() {
@@ -194,9 +195,10 @@ class LayoutTest {
     }
 
     @Test fun gaugePlatesAndHandleAreTappableTargetsAtTheSystemDistance() {
-        // D17: >= 4 cm and >= 2 deg at 1.75 m (physical), gaps >= 1.5 cm between the plates
+        // D17: >= 4 cm and >= 2 deg from the eye (v0.1.3: the tank is placed TANK_DIST ahead; the far side of the post is
+        // ~0.75 m away, use 0.9 m), gaps >= 1.5 cm between the plates
         for ((n, s) in listOf("gauge w" to Geo.GAUGE_HIT_W, "gauge h" to Geo.GAUGE_HIT_H, "handle" to Geo.HANDLE_HIT_H, "jar" to Geo.JAR_HIT_W)) {
-            val m = Geo.phys(s); val deg = Math.toDegrees(2 * atan2(m / 2.0, 1.75)).toFloat()
+            val m = Geo.phys(s); val deg = Math.toDegrees(2 * atan2(m / 2.0, 0.9)).toFloat()
             assertTrue("$n ${m * 100} cm", m >= 0.04f); assertTrue("$n $deg deg", deg >= 2f)
         }
         val ys = Tide.entries.map { it.handleY }

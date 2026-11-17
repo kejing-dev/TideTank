@@ -5,9 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.embodit.tidetank.domain.Kind
 
-/** Ids of the two window containers. The tank volume is the default container (manifest). */
+/** v0.1.3 Full Space: the Stage (manifest TideTankStage) holds the tank; this is the one control window. */
 object Containers {
-    const val VOLUME = "TideTankVolume"
     const val CONTROL = "TideTankControl"
     const val CONTROL_TAG = "control"
 }
