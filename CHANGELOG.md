@@ -6,6 +6,7 @@
 - 缸往远、往高挪：缸心离眼 0.88 m（原 0.70），缸沿在眼下 0.14 m（原 0.24）；底座、木柱、罐墩、罐子跟着一起动
 - 站着、坐着平视都能看到整只缸、底座、木柱和罐墩上的罐子（每个包围盒 8 个角的投影角都在 ±39° 内，单测）
 - 其余不变
+- 已知问题（用户 2026-11-17 真机看过后放行）：在缸口中间倒食时控制窗会挡住罐子和提示卡（QA #5 q5-1，移到缸口右侧靠边倒能看到）；手直接拿罐要伸直手臂、身体略前倾（罐墩离肩约 0.8 m，可改用射线 / 眼手）；演示视频是模拟器调试指令驱动的录屏，非真实手势录像，没有声音
 
 English:
 - The tank moved farther and higher: centre 0.88 m from the eye (was 0.70), rim 0.14 m under the eye (was 0.24); the
@@ -13,6 +14,10 @@ English:
 - Standing or seated, looking level, the whole tank, base, post and the jar on its pedestal are in view (all 8 corners of
   every box project within +-39 deg, unit-tested)
 - Nothing else changed
+- Known issues (released after a headset check on 2026-11-17): pouring over the middle of the tank, the control window
+  hides the jar and its tip (QA #5 q5-1; pour near the right edge to see it); picking the jar up by hand needs a straight
+  arm and a slight lean (about 0.8 m from the shoulder; the ray / eye-hand works too); the demo video is driven by emulator
+  debug input, not real hands, and is silent
 
 ## v0.1.3 · 2026-11-16 (gate C · the jar is a toggle, Full Space)
 

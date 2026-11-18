@@ -6,75 +6,76 @@
 
 ## 中文
 
-桌上一只海水缸，v0.1.3 起在 PICO OS 6 的 Full Space（混合现实 Stage）里摆在你正前方、控制窗下面。碰到饲料罐按 grip 或扳机拿起来（远处用手柄射线或眼手指着按一下也行），松手它还跟着你的手；移到水面上翻手腕就倒饲料，再按一次放回罐墩，鱼群追着抢；也可以直接点沙底撒一小撮。拖黄铜潮位手柄（落 / 平 / 涨三档吸附）或点刻度牌换潮位：落潮礁石露出水面，涨满潮外海的闸门打开。换着饲料和潮位，把缸里藏着的 6 种海洋生物一个个引出来，图鉴记下见过的。
+一只海水缸摆在你正前方（PICO OS 6 Full Space，混合现实 Stage）：缸里有礁石、海葵、海草和一群青魔，缸边立着黄铜潮位柱，罐墩上放着饲料罐，控制窗在缸的上方。手或手柄碰到饲料罐按一下 grip / 扳机拿起来，松手也还在手里（远处用手柄射线或眼手指着按一下也行）；移到水面上翻手腕就倒饲料，转得越多撒得越多，再按一下放回罐墩；也可以直接点沙底撒一小撮。拖黄铜潮位手柄（落 / 平 / 涨三档吸附）或点刻度牌换潮位：落潮礁石露出水面，涨满潮外海的闸门打开。换着饲料和潮位，把缸里藏着的 6 种海洋生物一个个引出来，图鉴记下见过的。
 
-- 体积 1.19 × 0.78 × 0.64 m（缸 0.84 m 宽）+ 缸正下方的控制窗（600 × 440 dp，原生 TabBar：水缸 / 图鉴 / 设置）
+- 缸心离眼 0.88 m、缸沿在眼下 0.14 m，站着坐着平视都能看到整只缸；控制窗 600 × 440 dp，原生 TabBar：水缸 / 图鉴 / 设置
 - 三种饲料（浮片 / 沉粒 / 丰年虾）、三档潮位；青魔、小丑鱼、寄居蟹、海马、蓝吊、海月水母各有出场条件
-- 手势捏合、眼动 + 捏合、手柄射线；静音、三档音量、水泵声、减少动态、重开控制窗、重置、退出
-- 中英双语，全部本机运行，不联网、不需要账号
+- 手势捏合、眼动 + 捏合、手柄射线；设置里 [叫回面前]，摇杆左右转缸
+- 静音、三档音量、水泵声、减少动态、重置、退出；中英双语，全部本机运行，不联网、不需要账号
 
 | | |
 |---|---|
-| ![六个都见到了](docs/shot-01.jpg) 六个都见到了，图鉴 6/6 | ![拿起饲料罐](docs/shot-02.jpg) 拿起饲料罐，虚线标出落点 |
-| ![撒浮片](docs/shot-03.jpg) 撒浮片，青魔冲上来抢食 | ![落潮](docs/shot-04.jpg) 平潮 → 落潮，礁石露出水面 |
-| ![小丑鱼](docs/shot-05.jpg) 往海葵边撒沉粒，小丑鱼出来了 | ![图鉴详情](docs/shot-06.jpg) 图鉴详情：海马 |
+| ![六个都见到了](docs/shot-01.jpg) 六个都见到了，图鉴 6/6 | ![拿起饲料罐](docs/shot-02.jpg) 拿起饲料罐，旁边是「翻手倒食物」提示卡 |
+| ![撒浮片](docs/shot-03.jpg) 撒浮片，青魔冲上来抢食 | ![落潮](docs/shot-04.jpg) 落潮，礁石露出水面 |
+| ![图鉴](docs/shot-05.jpg) 图鉴：六种生物和出场条件 | ![图鉴详情](docs/shot-06.jpg) 图鉴详情：海马 |
 
-截图来自 PICO 模拟器（v0.1.2，QA #3）。演示视频是模拟器调试指令驱动的录屏，**非真实手势录像**，没有声音。
+截图来自 PICO 模拟器（v0.1.4）。演示视频是模拟器调试指令驱动的录屏，**非真实手势录像**，没有声音。
 
 ### 安装
 
-从 [Release v0.1.2](https://github.com/kejing-dev/TideTank/releases/tag/v0.1.2) 下载 `TideTank-v0.1.2.apk`（`assembleRelease` 未签名包，供 Vibe Lab 平台签名；自己装到头显请用本地 `./gradlew assembleDebug` 的包）：
+从 [Release v0.1.4](https://github.com/kejing-dev/TideTank/releases/tag/v0.1.4) 下载 `TideTank-v0.1.4.apk`（`assembleRelease` 未签名包，供 Vibe Lab 平台签名；自己装到头显请用本地 `./gradlew assembleDebug` 的包）：
 
 ```
-adb install -r TideTank-v0.1.2.apk
+adb install -r TideTank-v0.1.4.apk
 pico-cli app launch io.embodit.tidetank
 ```
 
 ### 已知问题
 
-- 控制窗在缸下方，窗中心在视线下约 30°（系统摆位限制）
-- 坐着打开时系统仍按站姿高度摆缸，缸心在视线上方约 13°
-- 模拟器上换应用后的第一次冷启动偶尔要 8–21 秒（之后约 1 秒，判断为模拟器预热；头显未测）
+- 在缸口中间倒食时，控制窗会挡住罐子和提示卡；把罐子移到缸口右侧靠边倒能看到
+- 手直接拿罐要伸直手臂、身体略前倾（罐墩离肩约 0.8 m）；够不着可以用手柄射线或眼手远程拿
+- 演示视频是模拟器调试指令驱动的录屏，非真实手势录像，没有声音
 
 ## English
 
-A reef tank in front of you, in PICO OS 6 Full Space (a Mixed Stage, since v0.1.3). Touch the food jar and press grip or
-trigger to pick it up (or point the controller ray / eye-hand at it and press once); it stays with your hand when you let
-go. Turn your wrist over the water to pour, press again to put it back. Food trails down while
-the school chases it, or tap the sand for a pinch. Drag the brass tide handle (snaps to low / mid / high) or tap a gauge
-plate: low tide bares the rocks, high tide opens the sea gate. Mix food and tide to coax out six hidden creatures and fill
-the guide.
+A reef tank right in front of you (PICO OS 6 Full Space, a Mixed Stage): rocks, an anemone, seagrass, a school of chromis,
+a brass tide post and a food jar, with the control window above the tank. Touch the jar and press grip or trigger to pick it
+up (or point the controller ray / eye-hand at it and press once); it stays in your hand when you let go. Turn your wrist over
+the water to pour (more turn, more food), press again to put it back, or tap the sand for a pinch. Drag the brass tide handle
+(snaps to low / mid / high) or tap a gauge plate: low tide bares the rocks, high tide opens the sea gate. Mix food and tide to
+coax out six hidden creatures and fill the guide.
 
-- Volume 1.19 x 0.78 x 0.64 m (tank 0.84 m wide) + a control window right under the tank (600 x 440 dp, native TabBar:
-  Tank / Guide / Settings)
+- Tank centre 0.88 m from the eye, rim 0.14 m under it: the whole tank is in view standing or seated; control window
+  600 x 440 dp with a native TabBar (Tank / Guide / Settings)
 - Three foods (flakes / pellets / brine shrimp), three tides; chromis, clownfish, hermit crab, seahorse, blue tang and moon
   jelly each have their own conditions
-- Hand pinch, gaze + pinch, controller ray; mute, volume, pump hum, reduce motion, reopen controls, reset, quit
-- Chinese and English; fully offline, no account
+- Hand pinch, gaze + pinch, controller ray; Bring it back here; thumbstick turns the tank
+- Mute, volume, pump hum, reduce motion, reset, quit; Chinese and English; fully offline, no account
 
 | | |
 |---|---|
-| ![All six found](docs/shot-en-01.jpg) All six found | ![Mid tide](docs/shot-en-02.jpg) Mid tide, controls under the tank |
-| ![All found card](docs/shot-en-03.jpg) All-found card | ![Settings](docs/shot-en-04.jpg) Settings |
+| ![All six found](docs/shot-en-01.jpg) All six found | ![Jar picked up](docs/shot-en-02.jpg) The jar picked up, with its tip |
+| ![Guide](docs/shot-en-03.jpg) The guide | ![Settings](docs/shot-en-04.jpg) Settings |
 
-Screenshots are from the PICO emulator (v0.1.2). The demo video is driven by emulator debug input: **not a recording of
+Screenshots are from the PICO emulator (v0.1.4). The demo video is driven by emulator debug input: **not a recording of
 real hand gestures**, and silent.
 
 ### Install
 
-Download `TideTank-v0.1.2.apk` from [Release v0.1.2](https://github.com/kejing-dev/TideTank/releases/tag/v0.1.2) (unsigned
+Download `TideTank-v0.1.4.apk` from [Release v0.1.4](https://github.com/kejing-dev/TideTank/releases/tag/v0.1.4) (unsigned
 `assembleRelease` build for platform signing; for your own headset build `./gradlew assembleDebug`):
 
 ```
-adb install -r TideTank-v0.1.2.apk
+adb install -r TideTank-v0.1.4.apk
 pico-cli app launch io.embodit.tidetank
 ```
 
 ### Known issues
 
-- The control window sits under the tank, its centre about 30 deg below eye level (system placement)
-- Opened seated, the tank is still placed at standing height (centre about 13 deg above the eyes)
-- On the emulator the first cold start after switching apps can take 8-21 s (about 1 s afterwards; not measured on a headset)
+- Pouring over the middle of the tank, the control window hides the jar and its tip; pour near the right edge to see it
+- Picking the jar up by hand needs a straight arm and a slight lean (about 0.8 m from the shoulder); the ray or eye-hand
+  works from anywhere
+- The demo video is driven by emulator debug input, not real hands, and is silent
 
 ## Build / credits
 
