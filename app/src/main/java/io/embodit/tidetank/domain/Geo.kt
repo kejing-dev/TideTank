@@ -62,7 +62,7 @@ object Geo {
      * 60 cm tank); physical metres = tank units x [SCALE]. The jar pedestal and the tide post moved 0.5 cm inward so the
      * volume could shrink to 0.85 units around them.
      */
-    // v0.1.3 (Full Space, 门 C 改): the tank sits 0.62 m from the eye on the user's own floor plan, so it is drawn at the
+    // v0.1.3 (Full Space, 门 C 改): the tank sits 0.88 m (v0.1.4) from the eye on the user's own floor plan, so it is drawn at the
     // design's real size again (60 cm); 1.4 x only made sense inside a Shared Space volume parked 1.75 m away.
     const val SCALE = 1.0f
     // volume 0.85 x 0.56 x 0.46 tank units (physical 1.19 x 0.784 x 0.644 m)

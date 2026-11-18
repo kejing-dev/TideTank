@@ -196,9 +196,9 @@ class LayoutTest {
 
     @Test fun gaugePlatesAndHandleAreTappableTargetsAtTheSystemDistance() {
         // D17: >= 4 cm and >= 2 deg from the eye (v0.1.3: the tank is placed TANK_DIST ahead; the far side of the post is
-        // ~0.75 m away, use 0.9 m), gaps >= 1.5 cm between the plates
+        // ~0.91 m away since v0.1.4 put the tank 0.88 m ahead, use 1.0 m), gaps >= 1.5 cm between the plates
         for ((n, s) in listOf("gauge w" to Geo.GAUGE_HIT_W, "gauge h" to Geo.GAUGE_HIT_H, "handle" to Geo.HANDLE_HIT_H, "jar" to Geo.JAR_HIT_W)) {
-            val m = Geo.phys(s); val deg = Math.toDegrees(2 * atan2(m / 2.0, 0.9)).toFloat()
+            val m = Geo.phys(s); val deg = Math.toDegrees(2 * atan2(m / 2.0, 1.0)).toFloat()
             assertTrue("$n ${m * 100} cm", m >= 0.04f); assertTrue("$n $deg deg", deg >= 2f)
         }
         val ys = Tide.entries.map { it.handleY }

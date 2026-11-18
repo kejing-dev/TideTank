@@ -1,6 +1,6 @@
 # 潮汐水族 Tide Tank: project guidance
 
-A 60 cm reef tank in front of you for PICO OS 6 **Full Space** (one Mixed Stage, Spatial SDK BOM 6.1.9), package `io.embodit.tidetank`, v0.1.3.
+A 60 cm reef tank in front of you for PICO OS 6 **Full Space** (one Mixed Stage, Spatial SDK BOM 6.1.9), package `io.embodit.tidetank`, v0.1.4.
 v0.1.3 (gate C, 2026-11-16, profile D53 补): moved from a Shared Space volume to a Mixed Stage so the food jar can be a
 toggle that follows a hand / controller (volumes get no hand / controller / head poses: NOT_IN_FULL_SPACE).
 Design contract: spatial-app-factory `apps/aquarium/design-package.json` v1.2 (gate B passed 2026-11-15 with the defaults:
@@ -11,7 +11,7 @@ GitHub: `kejing-dev/TideTank` (private).
 
 ## Surfaces
 - **Tank** (Mixed Stage, `Main.kt` DefaultStage, manifest `pico.spatial.stage.*`): the scene root is placed yaw-only from the
-  head (`domain/ControlPlacement.placeTank`: tank centre 0.70 m ahead, rim 0.24 m under the eye; re-aimed for 2 s after the
+  head (`domain/ControlPlacement.placeTank`: tank centre 0.88 m ahead, rim 0.14 m under the eye (v0.1.4 q4-1: every box corner inside the +-39 deg view); re-aimed for 2 s after the
   first valid head pose, then locked; no head for 5 s -> fallback). Drawn at `Geo.SCALE` = 1.0 (the design's 60 cm tank);
   every measure is in tank units, origin = old volume centre, +X right, +Y up, +Z toward the user (`domain/Geo.kt`).
   Shell first, the 12 GLBs fade in as they arrive. Stick x turns the tank (60 deg/s) while the jar is home.
@@ -49,7 +49,7 @@ plates `tide:L|M|H`, `sign` (= [叫回面前]), `floor:*` taps feed at the hit p
 ## Build / test (kj-mbp-m5)
 ```bash
 export JAVA_HOME=~/.pico/primer-cli/jdk/jdk-21.0.13+9/Contents/Home
-./gradlew assembleDebug :app:testDebugUnitTest      # 73 JVM tests (HoldTest = the jar toggle replayed at 30 Hz, ControlPlacementTest = Full Space placement): rules, diet, fullness, queue, tide phases, hysteresis, layout / volume bounds, spawn, boids, calibration, sight lines, hit replay, save, drag total, volume slider
+./gradlew assembleDebug :app:testDebugUnitTest      # 74 JVM tests (HoldTest = the jar toggle replayed at 30 Hz, ControlPlacementTest = Full Space placement): rules, diet, fullness, queue, tide phases, hysteresis, layout / volume bounds, spawn, boids, calibration, sight lines, hit replay, save, drag total, volume slider
 ~/.factory-venv/bin/python tools/build_models.py ; ~/.factory-venv/bin/python tools/make_sounds.py ; ~/.factory-venv/bin/python tools/build_icon.py --icon512 icon.png
 DEV=<borrowed serial> tools/tt.sh install
 ```

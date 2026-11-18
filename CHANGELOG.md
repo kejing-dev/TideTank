@@ -1,5 +1,19 @@
 # Changelog · 更新记录
 
+## v0.1.4 · 2026-11-17 (QA #4 · the whole tank in view)
+
+中文：
+- 缸往远、往高挪：缸心离眼 0.88 m（原 0.70），缸沿在眼下 0.14 m（原 0.24）；底座、木柱、罐墩、罐子跟着一起动
+- 站着、坐着平视都能看到整只缸、底座、木柱和罐墩上的罐子（每个包围盒 8 个角的投影角都在 ±39° 内，单测）
+- 其余不变
+
+English:
+- The tank moved farther and higher: centre 0.88 m from the eye (was 0.70), rim 0.14 m under the eye (was 0.24); the
+  base, the tide post, the jar pedestal and the jar move with it
+- Standing or seated, looking level, the whole tank, base, post and the jar on its pedestal are in view (all 8 corners of
+  every box project within +-39 deg, unit-tested)
+- Nothing else changed
+
 ## v0.1.3 · 2026-11-16 (gate C · the jar is a toggle, Full Space)
 
 中文：

@@ -57,27 +57,51 @@ class ControlPlacementTest {
     }
 
     @Test fun jarIsWithinReach() {
-        // D53 补 direct pick without walking (B17): the jar on its pedestal <= 0.70 m from the left shoulder
+        // D53 补 direct pick without walking (B17): the jar on its pedestal <= 0.85 m from the left shoulder (v0.1.4 q4-1
+        // pushed the tank to 0.88 m so the whole tank is in view: an arm + controller + a small lean; ray / eye-hand anywhere)
         val eye = V3(0f, 1.6f, 0f)
         val root = ControlPlacement.placeTank(eye, fwd(0f))!!
         val shoulder = eye + V3(-0.18f, -0.25f, 0f)
         val d = (root.toStage(Geo.JAR_HOME) - shoulder).length
-        assertTrue("jar $d m from the shoulder", d <= 0.70f)
+        assertTrue("jar $d m from the shoulder", d <= 0.85f)
         // and not in the face (D14: >= 0.4 m from the head)
         assertTrue((root.toStage(Geo.JAR_HOME) - eye).length >= 0.4f)
     }
 
     @Test fun jarPostAndBoardAreInTheDefaultViewAtColdStart() {
         // M9 / D44 default view: the tank centre, the jar on its pedestal, the handle and the 「面板」 board are on screen
-        // without turning the head (FOV +-37 / +-39 deg), standing and seated
+        // without turning the head (FOV +-37 / +-39 deg), standing and seated -- perspective angles, as the picture shows them
         for (eyeY in listOf(1.6f, 1.2f)) {
             val eye = V3(0f, eyeY, 0f)
             val root = ControlPlacement.placeTank(eye, fwd(0f))!!
             for ((n, p) in listOf("jar" to Geo.JAR_HOME, "handle" to V3(Geo.POST_X, Tide.M.handleY, Geo.HANDLE_Z), "board" to Geo.SIGN_C, "tank" to Geo.TANK.centre)) {
-                val (az, el) = ControlPlacement.azEl(eye, root.yaw, root.toStage(p))
-                assertTrue("$n az $az el $el", abs(az) <= ControlPlacement.HALF_FOV_H_DEG && abs(el) <= ControlPlacement.HALF_FOV_V_DEG)
+                val (h, v) = ControlPlacement.projected(eye, root.yaw, root.toStage(p))
+                assertTrue("$n h $h v $v", abs(h) <= ControlPlacement.HALF_FOV_H_DEG && abs(v) <= ControlPlacement.HALF_FOV_V_DEG)
             }
         }
+    }
+
+    @Test fun everyCornerOfEveryBoxIsInTheViewStandingAndSeated() {
+        // QA #4 q4-1 (D54 坐姿 / D14 / default view): all 8 corners of the tank, base, tide post, its board, the jar pedestal
+        // and the jar on it, projected through a pinhole camera at the eye (not 4 centre points, not spherical elevation),
+        // stay within +-37 deg across and +-39 deg up / down, for a standing (1.6 m) and a seated (1.2 m) eye at any heading.
+        val worst = mutableMapOf<String, Float>()
+        for (eyeY in listOf(1.6f, 1.2f)) for (yaw in listOf(0f, 90f, 180f, -90f, 33f)) {
+            val eye = V3(0.3f, eyeY, -0.2f)
+            val root = ControlPlacement.placeTank(eye, fwd(yaw))!!
+            val corners = ControlPlacement.boxesProjected(eye, root)
+            assertEquals("6 boxes x 8 corners", 48, corners.size)
+            for ((n, h, v) in corners) {
+                assertTrue("eye $eyeY yaw $yaw $n h $h", abs(h) <= ControlPlacement.HALF_FOV_H_DEG)
+                assertTrue("eye $eyeY yaw $yaw $n v $v", abs(v) <= ControlPlacement.HALF_FOV_V_DEG)
+                worst[n] = minOf(worst[n] ?: 0f, v)
+            }
+        }
+        println("PROJ lowest corner per box (deg): " + worst.entries.joinToString { "%s %.1f".format(it.key, it.value) })
+        // the regression itself: v0.1.3 (0.70 m / rim 0.24 m) put the base's front bottom 50.4 deg down
+        val eye = V3(0f, 1.6f, 0f)
+        val old = RootPose(V3(0f, 1.6f - 0.24f - Geo.TANK_TOP, -0.70f), 0f)
+        assertTrue(ControlPlacement.boxesProjected(eye, old).any { abs(it.third) > 50f })
     }
 
     @Test fun aCarriedJarAndItsTipStayUnderTheWindow() {
